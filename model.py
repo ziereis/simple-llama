@@ -55,11 +55,11 @@ class SelfAttention(nn.Module):
         self.cache_v = torch.zeros((args.max_seq_len, args.n_heads, args.head_dim))
 
     def forward(self, x: torch.Tensor, pos: int):
-
         #(embedding_dim)
         xq = self.wq(x)
         xk = self.wk(x)
         xv = self.wv(x)
+
 
         # (n_heads, head_dim)
         xq = xq.view(self.n_heads, self.head_dim)
@@ -99,13 +99,17 @@ class SelfAttention(nn.Module):
         # xq matmul keysTranspose -> (1, len(seq))
         attention = torch.matmul(xq, keys.transpose(1,2)) / math.sqrt(self.head_dim)
         scores = F.softmax(attention, dim=-1)
+        print(f"scores: {scores}")
 
 
+
+        print(f"values: {values}")
         # scores (1, len(seq)) matmul (seq_len, head_dim) -> (1, head_dim)
         output = torch.matmul(scores, values)
 
         # (n_heads, 1, head_dim) -> (embedding_dim)
         output_joined = output.transpose(0, 1).contiguous().view(-1)
+        print(f"out : {output_joined}")
 
         return self.wo(output_joined)
 
@@ -132,7 +136,9 @@ class FeedForward(nn.Module):
 
     def forward(self, x: torch.Tensor):
         swish = F.silu(self.w1(x))
+        print(f"swish: {swish}")
         x_V = self.w3(x)
+        print(f"x_V: {x_V}")
         #element wise
         x = swish * x_V
         x = self.w2(x)
@@ -151,9 +157,16 @@ class EncoderBlock(nn.Module):
 
     def forward(self, x: torch.Tensor, pos: int):
         normalized = self.attention_norm(x)
-        encoded = x + self.attention(normalized, pos)
+        att = self.attention(normalized, pos)
+        print(f"attention: {att}")
+        encoded = x + att
+        print(f"resid: {encoded}")
+
         ffn_normalized = self.ffn_norm(encoded)
-        out = encoded + self.feed_forward(ffn_normalized)
+        print(f"normed: {ffn_normalized}")
+        ffn_out = self.feed_forward(ffn_normalized)
+        print(f"ffn: {ffn_out}")
+        out = encoded + ffn_out
         return out
 
 
@@ -162,6 +175,7 @@ class Transformer(nn.Module):
 
     def __init__(self, args: ModelArgs):
         super().__init__()
+        self.params = args
         self.dim = args.dim
         self.vocab_size = args.vocab_size
         self.tok_embeddings = nn.Embedding(args.vocab_size, args.dim)
@@ -175,6 +189,7 @@ class Transformer(nn.Module):
     def forward(self, token: int, pos: int):
         # take input token and query the embedding vector
         embedding = self.tok_embeddings(torch.tensor([token], dtype=torch.long))[0,:]
+        print(f"embedding: {embedding}")
         for layer in self.layers:
             embedding = layer(embedding, pos)
         embedding_normalized = self.norm(embedding)
