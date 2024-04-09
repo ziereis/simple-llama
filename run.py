@@ -22,6 +22,7 @@ if __name__ == "__main__":
   out_args = [args.executeable, args.weights] + encoded
 
   result = subprocess.run(out_args, capture_output=True, text=True)
+  print(result.stderr)
 
   tokens = result.stdout.split(" ")
   tokens = [int(x) for x in tokens if x != ""]

@@ -201,8 +201,11 @@ public:
     close(fd);
   }
 
-  void dump() const {
-    for (std::size_t i = 0; i < length; i++) {
+  void dump(u32 limit = 0) const {
+    if (limit != 0) {
+      limit = length;
+    }
+    for (std::size_t i = 0; i < limit; i++) {
       printf("%02x ", data()[i]);
     }
     printf("\n");
