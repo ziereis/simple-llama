@@ -21,15 +21,17 @@ function(configure_target target_name)
     )
 endfunction()
 
+include_directories(${CMAKE_SOURCE_DIR})
+
 # Llama library
-add_library(llama SHARED llama.cc)
+add_library(llama SHARED lib/llama.cc)
 configure_target(llama)
 
 # Quantize library
-add_library(quantize SHARED quantize.cc)
+add_library(quantize SHARED lib/quantize.cc)
 configure_target(quantize)
 
 # Main executable
-add_executable(main main.cc)
+add_executable(main lib/main.cc)
 configure_target(main)
 target_link_libraries(main PRIVATE llama quantize)
