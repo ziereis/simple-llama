@@ -27,7 +27,21 @@ def generate_greedy(llama: QLLama, promt: str, max_toks: int = 30) -> str:
   print(tokenizer.decode(output))
   return tokenizer.decode(output)
 
-# TODO: implement different generate function and evaluate quality
+# TODO: requirements.txt
+# TODO: Fix bug generate printing
+# TODO: Chris - add nice print statements + docstrings
+# TODO: Chris - implement different generate function and evaluate quality
+# TODO: Chris - Tokenizer
+# TODO: Chris - Checkout how quantization works
+# TODO: Update README
+
+# TODO: Thomas - GPU
+# TODO: EVAL: runtime, attention, feedforward, layer time, first_token
+# TODO: EVAL: inference_strategies (greedy vs. top-p)
+# TODO: EVAL: benchmark MMLU: Augenmaß 32bit vs. 16bit vs. 8bit vs. 4bit
+# TODO: EVAL: benchmark MMLU: LLaMA.cpp vs. own-implementation - das auch als Outlook nehmen
+
+# TODO Bericht: Quantization erklärt + easy parallelization + by group to shrink error. wie sieht quantized forward pass aus, an welchen Stellen quant. vs. dequant., etc.
 
 # TODO: implement chat-llama like function
 
