@@ -1,7 +1,6 @@
 #pragma once
 #include <cstdint>
 #include <fcntl.h>
-#include <format>
 #include <iostream>
 #include <span>
 #include <stdexcept>
@@ -24,10 +23,6 @@ using f64 = double;
 
 
 namespace tz {
-
-#define LOG_DEBUG(fmt, ...)                                                    \
-  std::cout << std::format(fmt, __VA_ARGS__) << std::endl
-
 
 class BinaryReader {
 public:
