@@ -1,29 +1,45 @@
 from sentencepiece import SentencePieceProcessor
 import argparse
-import subprocess
+import numpy as np
+import os
+from qllama import QLLama
+from llama_utils import load_tokenizer
 
-def load_tokenizer(tokenizer_path: str):
-    tokenizer = SentencePieceProcessor()
-    tokenizer.load(tokenizer_path)
-    return tokenizer
+tokenizer = load_tokenizer("bin/tokenizer.model")
+
+def generate_greedy(llama: QLLama, promt: str, max_toks: int = 30) -> str:
+  input = tokenizer.encode(promt)
+  output = []
+  # feed the entire prompt as context
+  for token in input:
+    out = llama.forward(token, len(output))
+    output.append(token)
+    print(tokenizer.decode(output), end="\r")
+
+  # generate the rest of the tokens
+  for _ in range(max_toks - len(output)):
+    out = llama.forward(output[-1], len(output))
+    next_token = int(np.argmax(out))
+    if next_token == tokenizer.eos_id():
+      break
+    output.append(next_token)
+    print(tokenizer.decode(output), end="\r")
+  print(tokenizer.decode(output))
+  return tokenizer.decode(output)
+
+# TODO: implement different generate function and evaluate quality
+
+# TODO: implement chat-llama like function
+
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("executeable", type=str, help="path to the llama executable", default= "build/llama")
-  parser.add_argument("weights", type=str, help="path to the weights file", default = "llama.bin")
-  parser.add_argument("input", metavar="N", type=str, nargs="+", help="input tokens")
-
+  parser.add_argument("--bin", type=str, help="path to exported llama f32 weights", default= "bin/llama_q8.bin")
+  parser.add_argument("--max-toks" , type=int, help="max tokens to generate", default=30)
+  parser.add_argument("prompt", type=str, nargs='*', help="prompt to generate from")
 
   args = parser.parse_args()
+  full_prompt = ' '.join(args.prompt) if args.prompt else None
 
-  tokenizer = load_tokenizer("bin/tokenizer.model")
-  encoded = tokenizer.encode(" ".join(args.input))
-  encoded = [str(x) for x in encoded]
-  out_args = [args.executeable, args.weights] + encoded
-
-  result = subprocess.run(out_args, capture_output=True, text=True)
-  print(result.stderr)
-
-  tokens = result.stdout.split(" ")
-  tokens = [int(x) for x in tokens if x != ""]
-  print(tokenizer.decode(tokens))
+  rt = QLLama(args.bin)
+  generate_greedy(rt, full_prompt, max_toks=args.max_toks)

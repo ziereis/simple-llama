@@ -1,12 +1,13 @@
 #include "include/transformer.hpp"
 #include "include/tz-utils.hpp"
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <fstream>
 #include <ostream>
 #include <vector>
 #include <numeric>
+#include "quantize.h"
+
 
 struct Qresult {
   std::vector<i8> weights;
@@ -41,12 +42,6 @@ Qresult quantize_q8(std::span<f32> data, i32 group_size) {
                    [scale](f32 x) { return static_cast<i8>(std::round(x / scale)); });
     scales[i] = scale;
   }
-  for (auto &s : scales) {
-    if (std::isnan(s)) {
-      std::cout << "nan scale\n";
-      exit(-1);
-    }
-  }
   std::vector<f32> recovered(data.size());
   f32 max_err = 0.0f;
   #pragma omp parallel for schedule(static) reduction(max : max_err)
@@ -61,11 +56,11 @@ Qresult quantize_q8(std::span<f32> data, i32 group_size) {
   return {std::move(weights), std::move(scales), max_err};
 }
 
-void quantize_model(std::string in_file, std::string out_file) {
+void quantize_model(const char* in_file, const char* out_file) {
   tz::MappedFile file(in_file);
   LLama m;
   m.init(file.asSpan());
-  i32 group_size = 64;
+  i32 group_size = 128;
 
   QuantizeParams qparams = {group_size, 8};
 
@@ -97,17 +92,9 @@ void quantize_model(std::string in_file, std::string out_file) {
       quantize_q8({m.tok_embeddings.data,
                    (u32)m.tok_embeddings.shape[0] * m.tok_embeddings.shape[1]},
                   group_size);
-  std::cout << "number of scales " << qres.scale.size() << "\n";
-  std::cout << "Scales: \n";
-  auto limit = 100;
-  for (int i = 0; i < limit; i++) {
-    std::cout << qres.scale[i] << " ";
-  }
   out.write((char*) qres.weights.data(),qres.weights.size());
   out.write((char*) qres.scale.data(), qres.scale.size() * sizeof(f32));
-
   std::cout << "max error: " << qres.max_error << std::endl;
-
 
   std::cout << "Quantizing output_weights\n";
   m.output_weights.dump_shape();
@@ -177,5 +164,3 @@ void quantize_model(std::string in_file, std::string out_file) {
 
   out.close();
 }
-
-int main() { quantize_model("../bin/llama.bin", "../bin/llama_q8.bin"); }

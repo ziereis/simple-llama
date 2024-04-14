@@ -1,20 +1,35 @@
 cmake_minimum_required(VERSION 3.22)
 project(simple-llama)
+
+# Enable export of compile commands and set C++ standard
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_BUILD_TYPE Release)
 
-set(CMAKE_BUILD_TYPE Debug)
-#find_package(OpenMP REQUIRED)
+# Find the OpenMP package
+find_package(OpenMP REQUIRED)
 
+# Function to setup target properties
+function(configure_target target_name)
+    target_compile_options(${target_name} PUBLIC
+        -Wall -Wextra -g -Wpedantic
+        -fdiagnostics-color=always
+        -march=native -ffast-math -fPIC
+    )
+    target_link_libraries(${target_name} PUBLIC
+        OpenMP::OpenMP_CXX
+    )
+endfunction()
 
-add_executable(llama llama.cc)
-target_compile_options(llama PUBLIC -Wall -fopenmp -Wextra -g -Wpedantic -fdiagnostics-color=always  -Ofast -march=native -ffast-math )
-target_link_libraries(llama)
-target_link_options(llama PUBLIC -fopenmp)
+# Llama library
+add_library(llama SHARED llama.cc)
+configure_target(llama)
 
+# Quantize library
+add_library(quantize SHARED quantize.cc)
+configure_target(quantize)
 
-add_executable(quantize quantize.cc)
-target_compile_options(quantize PUBLIC -Wall -Wextra -fopenmp -g -Wpedantic -fdiagnostics-color=always  -Ofast -march=native -ffast-math)
-target_link_libraries(quantize)
-target_link_options(quantize PUBLIC -fopenmp)
+# Main executable
+add_executable(main main.cc)
+configure_target(main)
+target_link_libraries(main PRIVATE llama quantize)

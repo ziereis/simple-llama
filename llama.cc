@@ -11,6 +11,7 @@
 #include <numeric>
 #include <stdexcept>
 #include <vector>
+#include "llama.h"
 
 // struct KVCache {
 //   f32 *data;
@@ -225,7 +226,9 @@ void check_none(f32 *begin, f32 *end) {
 
 class QRuntime {
 public:
-  void init(std::span<const u8> data) {
+  void init(std::string filename) {
+    file = tz::MappedFile(filename);
+    auto data = file.asSpan();
     m.init(data);
     for (i32 i = 0; i < 32; i++) {
       kcaches[i] = FMatrix::New(m.params.max_seq_len, m.params.dim);
@@ -253,7 +256,6 @@ public:
     dequantize(fx, x);
 
     for (i32 l_id = 0; l_id < m.params.n_layers; l_id++) {
-      std::cout << "Qrt Layer " << l_id << std::endl;
       QEncoderBlock &layer = m.layers[l_id];
       FMatrix kcache = kcaches[l_id];
       FMatrix vcache = vcaches[l_id];
@@ -376,6 +378,7 @@ private:
   std::array<FMatrix, 32> kcaches;
   std::array<FMatrix, 32> vcaches;
   QLLama m;
+  tz::MappedFile file;
 };
 
 i32 get_version(std::span<const u8> data) {
@@ -384,114 +387,131 @@ i32 get_version(std::span<const u8> data) {
   return reader.read<i32>();
 }
 
-int main(int argc, char **argv) {
-  // std::string filename;
-  // std::vector<i32> tokens;
 
-  // filename = argv[1];
+extern "C" {
 
-  // for (int i = 2; i < argc; ++i) {
-  //   tokens.push_back(std::atoi(argv[i]));
-  // }
-
-  // tz::MappedFile data(filename);
-
-  // auto version = get_version(data.asSpan());
-  // if (version == 1) {
-  //   Runtime rt;
-
-  //   rt.init(data.asSpan());
-
-  //   auto res = rt.generate(tokens, 30);
-
-  //   for (auto &r : res) {
-  //     std::cout << r << " ";
-  //   }
-  // } else {
-  //   QRuntime rt;
-
-  //   rt.init(data.asSpan());
-
-  //   auto res = rt.generate(tokens, 30);
-
-  //   for (auto &r : res) {
-  //     std::cout << r << " ";
-  //   }
-  // }
-
-  tz::MappedFile data("../bin/llama_q8.bin");
-  QRuntime rt;
-  rt.init(data.asSpan());
-
-  auto res = rt.generate(
-      {3439, 17632, 1925, 29892, 278, 6368, 310, 14215, 537, 5922, 393, 29871},
-      50);
-
-  for (auto &r : res) {
-    std::cout << r << " ";
-  }
-
-  // tz::MappedFile data("../bin/llama.bin");
-  // Runtime rt;
-  // rt.init(data.asSpan());
-
-  // auto res = rt.generate(
-  //     {3439, 17632, 1925, 29892, 278, 6368, 310, 14215, 537, 5922, 393, 29871},
-  //     50);
-
-  // for (auto &r : res) {
-  //   std::cout << r << " ";
-  // }
-
-
-
-
-
-  // Runtime rt;
-
-  // rt.init(data.asSpan());
-
-  // auto res = rt.generate(
-  //     {3439, 17632, 1925, 29892, 278, 6368, 310, 14215, 537, 5922, 393,
-  //     29871}, 20);
-
-  // for (auto &r : res) {
-  //   std::cout << r << " ";
-  // }
-
-  // auto a = FMatrix::New(1, 10);
-  // auto b = FMatrix::New(1, 10);
-  // auto c = FMatrix::New(1, 1);
-
-  // for (int i = 0; i < 10; i++) {
-  //   a.data[i] = -1.f + 1/ (i + 1.0f);
-  //   b.data[i] = 1.0f;
-  // }
-
-  // matvec_mul(a, b.t(), c.t());
-
-  // std::cout << c(0, 0) << std::endl;
-
-  // auto aq = QMatrix::New(1, 10, 2);
-  // auto bq = QMatrix::New(1, 10, 2);
-  // auto cq = FMatrix::New(1, 1);
-
-  // quantize(aq, a);
-  // quantize(bq, b);
-
-  // qmatvec_mul(aq, bq.t(), c.t());
-
-  // std::cout << c(0, 0) << std::endl;
-
-  // a.dump();
-  // b.dump();
-  // aq.dump();
-  // bq.dump();
-
-
-
-  // tz::MappedFile data("../bin/llama_q8.bin");
-  // data.dump(20);
-  // QLLama m;
-  // m.init(data.asSpan());
+QRuntimeHandle QRuntime_new(const char* filename) {
+  auto *rt = new QRuntime();
+  rt->init(filename);
+  return rt;
 }
+
+float* QRuntime_forward(QRuntimeHandle handle, i32 tok, i32 pos) {
+    auto rt = static_cast<QRuntime*>(handle);
+    auto logits = rt->forward(tok, pos);
+    return logits.data;
+}
+
+void QRuntime_delete(QRuntimeHandle handle) {
+    delete static_cast<QRuntime*>(handle);
+}
+
+}
+
+// int main(int argc, char **argv) {
+//   // std::string filename;
+//   // std::vector<i32> tokens;
+
+//   // filename = argv[1];
+
+//   // for (int i = 2; i < argc; ++i) {
+//   //   tokens.push_back(std::atoi(argv[i]));
+//   // }
+
+//   // tz::MappedFile data(filename);
+
+//   // auto version = get_version(data.asSpan());
+//   // if (version == 1) {
+//   //   Runtime rt;
+
+//   //   rt.init(data.asSpan());
+
+//   //   auto res = rt.generate(tokens, 30);
+
+//   //   for (auto &r : res) {
+//   //     std::cout << r << " ";
+//   //   }
+//   // } else {
+//   //   QRuntime rt;
+
+//   //   rt.init(data.asSpan());
+
+//   //   auto res = rt.generate(tokens, 30);
+
+//   //   for (auto &r : res) {
+//   //     std::cout << r << " ";
+//   //   }
+//   // }
+
+//   // tz::MappedFile data("../bin/llama_q8.bin");
+//   // QRuntime rt;
+//   // rt.init(data.asSpan());
+
+//   // auto res = rt.generate(
+//   //     {3439, 17632, 1925, 29892, 278, 6368, 310, 14215, 537, 5922, 393, 29871},
+//   //     50);
+
+//   // for (auto &r : res) {
+//   //   std::cout << r << " ";
+//   // }
+
+//   // tz::MappedFile data("../bin/llama.bin");
+//   // Runtime rt;
+//   // rt.init(data.asSpan());
+
+//   // auto res = rt.generate(
+//   //     {3439, 17632, 1925, 29892, 278, 6368, 310, 14215, 537, 5922, 393, 29871},
+//   //     50);
+
+//   // for (auto &r : res) {
+//   //   std::cout << r << " ";
+//   // }
+
+//   // Runtime rt;
+
+//   // rt.init(data.asSpan());
+
+//   // auto res = rt.generate(
+//   //     {3439, 17632, 1925, 29892, 278, 6368, 310, 14215, 537, 5922, 393,
+//   //     29871}, 20);
+
+//   // for (auto &r : res) {
+//   //   std::cout << r << " ";
+//   // }
+
+//   // auto a = FMatrix::New(1, 10);
+//   // auto b = FMatrix::New(1, 10);
+//   // auto c = FMatrix::New(1, 1);
+
+//   // for (int i = 0; i < 10; i++) {
+//   //   a.data[i] = -1.f + 1/ (i + 1.0f);
+//   //   b.data[i] = 1.0f;
+//   // }
+
+//   // matvec_mul(a, b.t(), c.t());
+
+//   // std::cout << c(0, 0) << std::endl;
+
+//   // auto aq = QMatrix::New(1, 10, 2);
+//   // auto bq = QMatrix::New(1, 10, 2);
+//   // auto cq = FMatrix::New(1, 1);
+
+//   // quantize(aq, a);
+//   // quantize(bq, b);
+
+//   // qmatvec_mul(aq, bq.t(), c.t());
+
+//   // std::cout << c(0, 0) << std::endl;
+
+//   // a.dump();
+//   // b.dump();
+//   // aq.dump();
+//   // bq.dump();
+
+
+
+//   // tz::MappedFile data("../bin/llama_q8.bin");
+//   // data.dump(20);
+//   // QLLama m;
+//   // m.init(data.asSpan());
+// }

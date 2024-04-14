@@ -152,6 +152,7 @@ public:
 
 class MappedFile : NonCopyable {
 public:
+  MappedFile() : fd(-1), addr(nullptr), length(0) {}
   MappedFile(std::string_view _filename) {
     // for null termination
     std::string filename = std::string(_filename);
