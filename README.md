@@ -27,7 +27,7 @@
 
 
 
-## Output
+## Outputs
 * norm (embedding_dim) = (4096)
 * output (embedding_dim, vocab_size) = (4096, 32000)
 
