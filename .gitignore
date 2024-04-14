@@ -1,0 +1,6 @@
+__pycache__/
+llama-2-7b/
+venv/
+tokenizer.model
+bin/
+build/
