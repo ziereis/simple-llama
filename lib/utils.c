@@ -19,11 +19,10 @@ void start_timer(Timer *t) { clock_gettime(CLOCK_MONOTONIC, &t->start); }
 
 void stop_timer(Timer *t) { clock_gettime(CLOCK_MONOTONIC, &t->end); }
 
-f64 elapsed_time(Timer *t) {
-  return (t->end.tv_sec - t->start.tv_sec) * 1000+
-         (t->end.tv_nsec - t->start.tv_nsec) / 1e9;
+int elapsed_time(Timer *t) {
+  return (int)((t->end.tv_sec - t->start.tv_sec) * 1000 +
+               (t->end.tv_nsec - t->start.tv_nsec) / 1e6);
 }
-
 
 
 Matrix new_matrix(i32 rows, i32 cols) {

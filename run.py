@@ -10,7 +10,6 @@ tokenizer = load_tokenizer("bin/tokenizer.model")
 
 def generate_greedy(llama: Runtime, prompt: str, max_toks: int = 30) -> str:
   input_tokens = tokenizer.encode(prompt)
-  input_tokens.insert(0, tokenizer.bos_id())
   output_tokens = []
   # feed the entire prompt as context
   for token in input_tokens:
@@ -36,7 +35,6 @@ def generate_greedy(llama: Runtime, prompt: str, max_toks: int = 30) -> str:
 
 def generate_top_p(llama: Runtime, prompt: str, max_toks: int = 30, temperature: float = 0.1, top_p: float = 0.90) -> str:
   input_tokens = tokenizer.encode(prompt)
-  input_tokens.insert(0, tokenizer.bos_id())
   output_tokens = []
   for token in input_tokens:
     _ = llama.forward(token, len(output_tokens))
