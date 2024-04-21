@@ -1,16 +1,13 @@
-#ifndef QUANTIZE_H
-#define QUANTIZE_H
+#pragma once
+#include "utils.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
-#include <stdint.h>
+typedef enum {
+  Q8,
+  Q4,
+  NONE,
+} QuantizationType;
 
-void quantize_model(const char* in_file, const char* out_file);
+void quant_model(const char* in_file, const char* out_file, QuantizationType qt);
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif // QUANTIZE_H
+float calc_error(f32 *orig, f32 *deq, u64 n);

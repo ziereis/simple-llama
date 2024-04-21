@@ -14,7 +14,7 @@ def serialize_fp32(file, tensor):
 
 
 def serialize(filename: str, model: Transformer):
-  version = 1
+  version = 3
   magic = 0x7fdd7f7f
   out_file = open(filename, 'wb')
   out_file.write(struct.pack('I', magic))
@@ -26,10 +26,11 @@ def serialize(filename: str, model: Transformer):
   assert pad >= 0
   out_file.write(b'\0' * pad)
   weights = [
-        *[layer.attention_norm.weight for layer in model.layers],
-        *[layer.ffn_norm.weight for layer in model.layers],
         model.norm.weight,
         model.tok_embeddings.weight,
+        model.output.weight,
+        *[layer.attention_norm.weight for layer in model.layers],
+        *[layer.ffn_norm.weight for layer in model.layers],
         *[layer.attention.wq.weight for layer in model.layers],
         *[layer.attention.wk.weight for layer in model.layers],
         *[layer.attention.wv.weight for layer in model.layers],
@@ -38,7 +39,6 @@ def serialize(filename: str, model: Transformer):
         *[layer.feed_forward.w2.weight for layer in model.layers],
         *[layer.feed_forward.w3.weight for layer in model.layers],
     ]
-  weights.append(model.output.weight)
   for w in tqdm(weights, desc="serializing"):
     serialize_fp32(out_file, w)
   out_file.close()

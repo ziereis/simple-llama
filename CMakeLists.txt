@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
-project(simple-llama)
+project(simple-llama C)
 
-# Enable export of compile commands and set C++ standard
+# Enable export of compile commands
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_BUILD_TYPE Release)
 
 # Find the OpenMP package
@@ -17,21 +17,22 @@ function(configure_target target_name)
         -march=native -ffast-math -fPIC
     )
     target_link_libraries(${target_name} PUBLIC
-        OpenMP::OpenMP_CXX
+        OpenMP::OpenMP_C m
     )
 endfunction()
 
 include_directories(${CMAKE_SOURCE_DIR})
 
 # Llama library
-add_library(llama SHARED lib/llama.cc)
+add_library(llama SHARED lib/llama.c lib/utils.c lib/ops.c)
 configure_target(llama)
 
 # Quantize library
-add_library(quantize SHARED lib/quantize.cc)
+add_library(quantize SHARED lib/quantize.c lib/utils.c lib/ops.c)
 configure_target(quantize)
+target_link_libraries(quantize PRIVATE llama)
 
 # Main executable
-add_executable(main lib/main.cc)
-configure_target(main)
-target_link_libraries(main PRIVATE llama quantize)
+add_executable(test lib/test.c lib/utils.c lib/ops.c)
+configure_target(test)
+target_link_libraries(test PRIVATE llama quantize)

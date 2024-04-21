@@ -3,20 +3,22 @@ from sentencepiece import SentencePieceProcessor
 import argparse
 import numpy as np
 import os
-from qllama import QLLama
+from qllama import Runtime, CreateRuntime
 from llama_utils import load_tokenizer
 
 tokenizer = load_tokenizer("bin/tokenizer.model")
 
-def generate_greedy(llama: QLLama, prompt: str, max_toks: int = 30) -> str:
+def generate_greedy(llama: Runtime, prompt: str, max_toks: int = 30) -> str:
   input_tokens = tokenizer.encode(prompt)
+  input_tokens.insert(0, tokenizer.bos_id())
   output_tokens = []
   # feed the entire prompt as context
   for token in input_tokens:
     # _ skip, because we dont care about the next token predictions of the prompt. Just to populate KV Cache
     _ = llama.forward(token, len(output_tokens))
     output_tokens.append(token)
-    print(tokenizer.decode(output_tokens), end="\r")
+    os.system('clear')
+    print(tokenizer.decode(output_tokens))
 
   # generate the rest of the tokens
   while len(output_tokens) < max_toks:
@@ -26,17 +28,21 @@ def generate_greedy(llama: QLLama, prompt: str, max_toks: int = 30) -> str:
     if next_token == tokenizer.eos_id():
       break
     output_tokens.append(next_token)
-    print(tokenizer.decode(output_tokens), end="\r")
+    os.system('clear')
+    print(tokenizer.decode(output_tokens))
+  os.system('clear')
   print(tokenizer.decode(output_tokens))
   return tokenizer.decode(output_tokens)
 
-def generate_top_p(llama: QLLama, prompt: str, max_toks: int = 30, temperature: float = 2, top_p: float = 0.1) -> str:
+def generate_top_p(llama: Runtime, prompt: str, max_toks: int = 30, temperature: float = 0.1, top_p: float = 0.90) -> str:
   input_tokens = tokenizer.encode(prompt)
+  input_tokens.insert(0, tokenizer.bos_id())
   output_tokens = []
   for token in input_tokens:
     _ = llama.forward(token, len(output_tokens))
     output_tokens.append(token)
-    print(tokenizer.decode(output_tokens), end="\r")
+    os.system('clear')
+    print(tokenizer.decode(output_tokens))
 
   while len(output_tokens) < max_toks:
     latest_token = output_tokens[-1]
@@ -47,8 +53,10 @@ def generate_top_p(llama: QLLama, prompt: str, max_toks: int = 30, temperature: 
     if next_token == tokenizer.eos_id():
       break
     output_tokens.append(next_token)
-    print(tokenizer.decode(output_tokens), end="\r")
-
+    os.system('clear')
+    print(tokenizer.decode(output_tokens))
+  os.system('clear')
+  print(tokenizer.decode(output_tokens))
   return tokenizer.decode(output_tokens)
 
 
@@ -89,11 +97,12 @@ def sample_top_p(probs, p):
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--bin", type=str, help="path to exported llama f32 weights", default= "bin/llama_q8.bin")
-  parser.add_argument("--max-toks" , type=int, help="max tokens to generate", default=30)
+  parser.add_argument("--max-toks" , type=int, help="max tokens to generate", default=1000)
   parser.add_argument("prompt", type=str, nargs='*', help="prompt to generate from")
 
   args = parser.parse_args()
   full_prompt = ' '.join(args.prompt) if args.prompt else None
 
-  rt = QLLama(args.bin)
-  generate_greedy(rt, full_prompt, max_toks=args.max_toks)
+  rt = CreateRuntime(args.bin)
+
+  generate_top_p(rt, full_prompt, max_toks=args.max_toks)
