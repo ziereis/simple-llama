@@ -9,7 +9,7 @@ TARGET=test
 all: $(TARGET)
 
 $(TARGET): $(OBJ_RUNTIME)
-	$(CC) $(CFLAGS) -o $@ $^ -lm
+	$(CC) $(CFLAGS) -o $@ $^ -lm -fopenmp
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@

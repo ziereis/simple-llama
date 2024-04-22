@@ -7,6 +7,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "llama.h"
+#include <cuda_device_runtime_api.h>
+#include <cuda_runtime_api.h>
+
+bool qllama_init_device(QLLama *device, QLLama *host) {
+  device->params = host->params;
+}
+
+
 void init_mat(Matrix *m, i32 rows, i32 cols, u8 *data, u64 pos) {
   m->shape[0] = rows;
   m->shape[1] = cols;
