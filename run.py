@@ -94,7 +94,7 @@ def sample_top_p(probs, p):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("--bin", type=str, help="path to exported llama f32 weights", default= "bin/llama_q8.bin")
+  parser.add_argument("--bin", type=str, help="path to exported llama f32 weights", default= "bin/llama_q4.bin")
   parser.add_argument("--max-toks" , type=int, help="max tokens to generate", default=1000)
   parser.add_argument("prompt", type=str, nargs='*', help="prompt to generate from")
 
@@ -103,4 +103,4 @@ if __name__ == "__main__":
 
   rt = CreateRuntime(args.bin)
 
-  generate_top_p(rt, full_prompt, max_toks=args.max_toks)
+  generate_top_p(rt, full_prompt, max_toks=args.max_toks, temperature=0.8, top_p=0.80)
