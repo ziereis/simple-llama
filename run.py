@@ -5,6 +5,8 @@ import numpy as np
 import os
 from qllama import Runtime, CreateRuntime
 from llama_utils import load_tokenizer
+import time
+import curses
 
 tokenizer = load_tokenizer("bin/tokenizer.model")
 
@@ -31,12 +33,22 @@ def generate_text(llama: Runtime, prompt: str, max_toks: int = 30, method: str =
 
   input_tokens = tokenizer.encode(prompt)
   output_tokens = []
-  for token in input_tokens:
+
+
+  start_time = time.time()
+  first_token = input_tokens[0]
+  _ = llama.forward(first_token, len(output_tokens))
+  output_tokens.append(first_token)
+  first_token_time = time.time() - start_time
+
+  # Feed in Prompt to fill KV Cache
+  for token in input_tokens[1:]:
     _ = llama.forward(token, len(output_tokens))
     output_tokens.append(token)
     os.system('clear')
     print(tokenizer.decode(output_tokens))
 
+  # Completion
   while len(output_tokens) < max_toks:
     latest_token = output_tokens[-1]
     out = llama.forward(latest_token, len(output_tokens))
@@ -56,6 +68,17 @@ def generate_text(llama: Runtime, prompt: str, max_toks: int = 30, method: str =
     print(tokenizer.decode(output_tokens))
   os.system('clear')
   print(tokenizer.decode(output_tokens))
+
+  # Calculate tokens per second
+  total_time = time.time() - start_time
+  average_token_time = total_time / len(output_tokens)
+  tokens_per_second = len(output_tokens) / total_time
+
+  # Output performance metrics
+  print(f"Time to generate first token: {first_token_time:.2f} seconds")
+  print(f"Average time per token: {average_token_time:.2f} seconds")
+  print(f"Tokens per second: {tokens_per_second:.2f}")
+
   return tokenizer.decode(output_tokens)
 
 
@@ -102,7 +125,7 @@ def sample_top_k(probs, k):
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--bin", type=str, help="path to exported llama f32 weights", default= "bin/llama_q8.bin")
-  parser.add_argument("--max-toks", type=int, help="max tokens to generate", default=400)
+  parser.add_argument("--max-toks", type=int, help="max tokens to generate", default=40)
   parser.add_argument("prompt", type=str, nargs='*', help="prompt to generate from")
 
   args = parser.parse_args()
@@ -116,6 +139,6 @@ if __name__ == "__main__":
 
   chat_input = "how to reverse a linked list in python?"
 
-  chat_packed = f"[INST] {chat_input} [/INST]"
+  chat_packed = f"[INST] {full_prompt} [/INST]"
 
-  generate_text(rt, full_prompt, max_toks=args.max_toks, method="top_k")
+  generate_text(rt, chat_packed, max_toks=args.max_toks, method="top_k")
