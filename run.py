@@ -8,32 +8,27 @@ from llama_utils import load_tokenizer
 
 tokenizer = load_tokenizer("bin/tokenizer.model")
 
-def generate_greedy(llama: Runtime, prompt: str, max_toks: int = 30) -> str:
-  input_tokens = tokenizer.encode(prompt)
-  output_tokens = []
-  # feed the entire prompt as context
-  for token in input_tokens:
-    # _ skip, because we dont care about the next token predictions of the prompt. Just to populate KV Cache
-    _ = llama.forward(token, len(output_tokens))
-    output_tokens.append(token)
-    os.system('clear')
-    print(tokenizer.decode(output_tokens))
 
-  # generate the rest of the tokens
-  while len(output_tokens) < max_toks:
-    latest_token = output_tokens[-1]
-    out = llama.forward(latest_token, len(output_tokens))
-    next_token = int(np.argmax(out))
-    if next_token == tokenizer.eos_id():
-      break
-    output_tokens.append(next_token)
-    os.system('clear')
-    print(tokenizer.decode(output_tokens))
-  os.system('clear')
-  print(tokenizer.decode(output_tokens))
-  return tokenizer.decode(output_tokens)
+def generate_text(llama: Runtime, prompt: str, max_toks: int = 30, method: str = 'greedy', temperature: float = 0.1,
+                  top_p: float = 0.1, top_k: int = 10000) -> str:
+  """
+     Generates text based on a given prompt using a specified sampling method.
 
-def generate_top_p(llama: Runtime, prompt: str, max_toks: int = 30, temperature: float = 0.1, top_p: float = 0.90) -> str:
+     Args:
+         llama (Runtime): The LLaMA model runtime instance.
+         prompt (str): The initial text to seed the generation.
+         max_toks (int): Maximum number of tokens to generate.
+         method (str): The method of sampling to use ('greedy', 'top_p', 'top_k').
+         temperature (float): Temperature scaling factor for probability distribution. Lower values lead to less randomness.
+         top_p (float): Cumulative probability threshold for top-p sampling (used only if method='top_p').
+         top_k (int): Number of top tokens considered for sampling (used only if method='top_k').
+
+     Returns:
+         str: The generated text as a string.
+     """
+
+  assert method in ['greedy', 'top_p', 'top_k'], "Invalid method specified. Use 'greedy', 'top_p', or 'top_k'."
+
   input_tokens = tokenizer.encode(prompt)
   output_tokens = []
   for token in input_tokens:
@@ -46,8 +41,14 @@ def generate_top_p(llama: Runtime, prompt: str, max_toks: int = 30, temperature:
     latest_token = output_tokens[-1]
     out = llama.forward(latest_token, len(output_tokens))
     out = torch.tensor(out)
-    probs = torch.softmax(out / temperature, dim=-1)
-    next_token = sample_top_p(probs, top_p)
+
+    if method == 'greedy':
+      next_token = torch.argmax(out).item()
+    elif method == 'top_p':
+      next_token = sample_top_p(torch.softmax(out / temperature, dim=-1), top_p)
+    elif method == 'top_k':
+      next_token = sample_top_k(torch.softmax(out / temperature, dim=-1), top_k)
+
     if next_token == tokenizer.eos_id():
       break
     output_tokens.append(next_token)
@@ -74,6 +75,12 @@ def sample_top_p(probs, p):
   next_token = torch.gather(probs_idx, -1, next_token)
   return next_token.item()
 
+def sample_top_k(probs, k):
+  top_k_probs, top_k_indices = torch.topk(probs, k)
+  next_token = top_k_indices[torch.multinomial(top_k_probs, num_samples=1)]
+  return next_token.item()
+
+
 # TODO: requirements.txt
 # TODO: Fix bug generate printing
 # TODO: Chris - add nice print statements + docstrings
@@ -95,7 +102,7 @@ def sample_top_p(probs, p):
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--bin", type=str, help="path to exported llama f32 weights", default= "bin/llama_q8.bin")
-  parser.add_argument("--max-toks" , type=int, help="max tokens to generate", default=1000)
+  parser.add_argument("--max-toks", type=int, help="max tokens to generate", default=400)
   parser.add_argument("prompt", type=str, nargs='*', help="prompt to generate from")
 
   args = parser.parse_args()
@@ -103,4 +110,12 @@ if __name__ == "__main__":
 
   rt = CreateRuntime(args.bin)
 
-  generate_top_p(rt, full_prompt, max_toks=args.max_toks)
+  sys_input = "you are an export python programmer and help me write python code"
+
+  sys_packed = f"[INST] <<SYS>> {sys_input} <<SYS>> [/INST]"
+
+  chat_input = "how to reverse a linked list in python?"
+
+  chat_packed = f"[INST] {chat_input} [/INST]"
+
+  generate_text(rt, full_prompt, max_toks=args.max_toks, method="top_k")

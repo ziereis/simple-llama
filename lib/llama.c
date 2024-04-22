@@ -594,6 +594,9 @@ f32 *forward_q8(QLLamaRuntime *rt, i32 tok, i32 pos) {
 }
 
 f32 *forward_q4(QLLamaRuntime *rt, i32 tok, i32 pos) {
+
+
+
   int g_size = rt->m.params.group_size;
   int dim = rt->m.params.dim;
   int h_dim = rt->m.params.hidden_dim;
@@ -602,6 +605,7 @@ f32 *forward_q4(QLLamaRuntime *rt, i32 tok, i32 pos) {
   int head_dim = dim / n_heads;
 
   QMatrix embedding = get_row_q4(rt->m.tok_embeddings, tok, g_size);
+
 
   dequantize_q4(rt->f_x.data, embedding.data, embedding.scales, dim, g_size);
 
