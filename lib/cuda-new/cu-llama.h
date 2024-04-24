@@ -1,6 +1,7 @@
 #include "../utils.h"
 #include "../llama.h"
 
+void print_device_info();
 
 extern "C" {
 void qllama_init_device(QLLama *d_m, QLLama *h_m);

@@ -83,8 +83,8 @@ sys_input = "you are an export python programmer and help me write python code"
 
 sys_packed = f"[INST] <<SYS>> {sys_input} <<SYS>> [/INST]"
 
-chat_input = "how to reverse a linked list in python?"
+chat_input = "how do i implement quicksort in scala?"
 
 chat_packed = f"[INST] {chat_input} [/INST]"
 
-print(generate_top_p(rt, chat_packed, 500, 0.3, 0.9))
+generate_top_p(rt, chat_packed, 1000, 0.3, 0.9)

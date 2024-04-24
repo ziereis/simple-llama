@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 project(cu_llama_app LANGUAGES CXX C CUDA)
 
 # Set the CUDA architecture
-set(CMAKE_CUDA_ARCHITECTURES 50)
+#set(CMAKE_CUDA_ARCHITECTURES 50)
 set(CMAKE_BUILD_TYPE Release)
 
 # Include the directories where the CUDA headers are located
@@ -19,6 +19,10 @@ set_target_properties(cu_llama PROPERTIES
 set_target_properties(cu_llama PROPERTIES
                       CXX_STANDARD 14
                       CXX_STANDARD_REQUIRED ON)
+
+target_compile_options(cu_llama PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+                       --use_fast_math
+                       >)
 
 
 # Add an executable that will use the shared library
