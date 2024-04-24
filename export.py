@@ -57,5 +57,5 @@ if __name__ == "__main__":
   load_tokenizerk = load_tokenizer(args.tok_path)
   print(f"loading model from {args.default_dir} ")
   model = load_llama(args.default_dir, load_tokenizerk.vocab_size(), args.max_seq_len)
-  print(f"serializing model to {args.bin_dir}/llama.bin")
+  print(f"serializing model to {args.bin_dir}/chat-llama.bin")
   serialize(f"{args.bin_dir}/chat-llama.bin", model)

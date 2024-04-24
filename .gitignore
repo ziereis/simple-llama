@@ -4,4 +4,8 @@ venv/
 tokenizer.model
 bin/
 build/
+*.o
+lib/*.o
+.cache/
+.vscode/
 .idea/

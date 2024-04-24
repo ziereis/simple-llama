@@ -133,12 +133,4 @@ if __name__ == "__main__":
 
   rt = CreateRuntime(args.bin)
 
-  sys_input = "you are an export python programmer and help me write python code"
-
-  sys_packed = f"[INST] <<SYS>> {sys_input} <<SYS>> [/INST]"
-
-  chat_input = "how to reverse a linked list in python?"
-
-  chat_packed = f"[INST] {full_prompt} [/INST]"
-
-  generate_text(rt, chat_packed, max_toks=args.max_toks, method="top_k")
+  generate_top_p(rt, full_prompt, max_toks=args.max_toks, temperature=0.8, top_p=0.80)

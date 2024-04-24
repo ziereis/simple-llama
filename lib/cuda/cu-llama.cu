@@ -1,0 +1,602 @@
+#include <cuda_device_runtime_api.h>
+#include <cuda_runtime_api.h>
+#include "assert.h"
+extern "C" {
+#include "../utils.h"
+#include "../llama.h"
+#include "../ops.h"
+}
+#include "stdio.h"
+#include "cu-ops.h"
+#include "algorithm"
+
+void print_device_info() {
+  cudaDeviceProp prop;
+  int count = 0;
+
+  cudaGetDeviceCount(&count);
+  printf("Number of devices: %d\n", count);
+
+  for (int i = 0; i < count; i++) {
+    cudaGetDeviceProperties(&prop, i);
+    printf("Device %d: %s\n", i, prop.name);
+    printf("Global memory: %lu MB\n", prop.totalGlobalMem / (1024 * 1024));
+    printf("Shared memory per block: %zu KB\n", prop.sharedMemPerBlock / 1024);
+    printf("Registers per block: %d\n", prop.regsPerBlock);
+    printf("Warp size: %d\n", prop.warpSize);
+    printf("Max threads per block: %d\n", prop.maxThreadsPerBlock);
+    printf("Max block dimensions: %d x %d x %d\n", prop.maxThreadsDim[0],
+           prop.maxThreadsDim[1], prop.maxThreadsDim[2]);
+    printf("FP16 support: %s\n", (prop.major > 5 || (prop.major == 5 && prop.minor >= 3)) ? "Yes" : "No");
+    printf("Compute capability: %d.%d\n", prop.major, prop.minor);
+
+    // Approximate check for BF16 support: available in Ampere or newer architectures (Compute Capability 8.0+)
+    if (prop.major >= 8) {
+      printf("BF16 support: Yes\n");
+    } else {
+      printf("BF16 support: No\n");
+    }
+  }
+}
+
+QMatrix new_matrix_q4_device(i32 rows, i32 cols, i32 group_size) {
+  i8 *data;
+  cudaMalloc(&data, rows * cols * sizeof(i8) / 2);
+  f32 *scales;
+  cudaMalloc(&scales, rows * cols * sizeof(f32) / group_size);
+  return (QMatrix){.scales = scales, .shape = {rows, cols}, .data = data};
+}
+
+Matrix new_matrix_device(i32 rows, i32 cols) {
+  f32 *data;
+  cudaMalloc(&data, rows * cols * sizeof(f32));
+  return (Matrix){.data = data,.shape = {rows, cols}};
+}
+
+void copy_dtoh(Matrix device, Matrix host) {
+  int n = host.shape[0] * host.shape[1];
+  cudaMemcpy(host.data, device.data, n * sizeof(f32), cudaMemcpyDeviceToHost);
+}
+void copy_htod(Matrix host, Matrix device) {
+  int n = host.shape[0] * host.shape[1];
+  cudaMemcpy(device.data, host.data, n * sizeof(f32), cudaMemcpyHostToDevice);
+}
+void copy_dtoh_q4(QMatrix device, QMatrix host, int g_size) {
+  int n = host.shape[0] * host.shape[1];
+  cudaMemcpy(host.data, device.data, n / 2, cudaMemcpyDeviceToHost);
+  cudaMemcpy(host.scales, device.scales, n / g_size * sizeof(f32), cudaMemcpyDeviceToHost);
+}
+void copy_htod_q4(QMatrix host, QMatrix device, int g_size) {
+  int n = host.shape[0] * host.shape[1];
+  cudaMemcpy(device.data, host.data, n / 2, cudaMemcpyHostToDevice);
+  cudaMemcpy(device.scales, host.scales, n / g_size * sizeof(f32), cudaMemcpyHostToDevice);
+}
+
+
+
+void qllama_init_device(QLLama *d_m, QLLama *h_m) {
+  assert(h_m->params.bitwidth == 4);
+  d_m->file = h_m->file;
+  d_m->params = h_m->params;
+  int dim = h_m->params.dim;
+  int h_dim = h_m->params.hidden_dim;
+  int n_layers = h_m->params.n_layers;
+  int vocab_size = h_m->params.vocab_size;
+  int g_size = h_m->params.group_size;
+
+  d_m->norm = new_matrix_device(1, dim);
+  copy_htod(h_m->norm, d_m->norm);
+  d_m->tok_embeddings = new_matrix_q4_device(vocab_size, dim, g_size);
+  copy_htod_q4(h_m->tok_embeddings, d_m->tok_embeddings, g_size);
+  d_m->output_weights = new_matrix_q4_device(vocab_size, dim, g_size);
+  copy_htod_q4(h_m->output_weights, d_m->output_weights, g_size);
+
+  for (int i = 0; i < n_layers; i++) {
+    QEncoderBlock *h_layer = &h_m->layers[i];
+    QEncoderBlock *d_layer = &d_m->layers[i];
+    d_layer->ffn_norm = new_matrix_device(1, dim);
+    copy_htod(h_layer->ffn_norm, d_layer->ffn_norm);
+    d_layer->attention_norm = new_matrix_device(1, dim);
+    copy_htod(h_layer->attention_norm, d_layer->attention_norm);
+    d_layer->wq = new_matrix_q4_device(dim, dim, g_size);
+    copy_htod_q4(h_layer->wq, d_layer->wq, g_size);
+    d_layer->wk = new_matrix_q4_device(dim, dim, g_size);
+    copy_htod_q4(h_layer->wk, d_layer->wk, g_size);
+    d_layer->wv = new_matrix_q4_device(dim, dim, g_size);
+    copy_htod_q4(h_layer->wv, d_layer->wv, g_size);
+    d_layer->wo = new_matrix_q4_device(dim, dim, g_size);
+    copy_htod_q4(h_layer->wo, d_layer->wo, g_size);
+    d_layer->w1 = new_matrix_q4_device(h_dim, dim, g_size);
+    copy_htod_q4(h_layer->w1, d_layer->w1, g_size);
+    d_layer->w2 = new_matrix_q4_device(dim, h_dim, g_size);
+    copy_htod_q4(h_layer->w2, d_layer->w2, g_size);
+    d_layer->w3 = new_matrix_q4_device(h_dim, dim, g_size);
+    copy_htod_q4(h_layer->w3, d_layer->w3, g_size);
+  }
+}
+
+void device_runtime_init_q4(QLLamaRuntime *rt, QLLama *m) {
+  int dim = m->params.dim;
+  int h_dim = m->params.hidden_dim;
+  int g_size = m->params.group_size;
+  int n_layers = m->params.n_layers;
+
+  rt->q = new_matrix_device(1, dim);
+  rt->f_x = new_matrix_device(1, dim);
+  rt->q_x = new_matrix_q4_device(1, dim, g_size);
+  rt->f_x_buf = new_matrix_device(1, dim);
+  rt->q_x_buf = new_matrix_q4_device(1, dim, g_size);
+  rt->f_x_buf2 = new_matrix_device(1, dim);
+  rt->q_h_buf = new_matrix_q4_device(1, h_dim, g_size);
+  rt->f_h_buf = new_matrix_device(1, h_dim);
+  rt->f_h_buf2 = new_matrix_device(1, h_dim);
+  rt->logits = new_matrix_device(1, m->params.vocab_size);
+  rt->attention = new_matrix_device(m->params.n_heads, m->params.max_seq_len);
+  for (int i = 0; i < n_layers; i++) {
+    rt->kcaches[i] = new_matrix_device(m->params.max_seq_len, dim);
+    rt->vcaches[i] = new_matrix_device(m->params.max_seq_len, dim);
+  }
+  rt->m = *m;
+}
+
+
+void d_print_mat(Matrix m, int n ) {
+  f32 *data = (f32 *)malloc(n * sizeof(f32));
+  cudaMemcpy(data, m.data, n * sizeof(f32), cudaMemcpyDeviceToHost);
+  print_vec(data, n, 0);
+  free(data);
+}
+
+void d_print_vec(float *data, int n) {
+  float *h_data = (float *)malloc(n * sizeof(float));
+  cudaMemcpy(h_data, data, n * sizeof(float), cudaMemcpyDeviceToHost);
+  print_vec(h_data, n, 0);
+  free(h_data);
+}
+
+#define unpack_left(in) ((in >> 4) & 0x0f) - 8
+#define unpack_right(in) (in & 0x0f) - 8
+
+void print_q4(QMatrix m, int n, int g_size) {
+  for (int i = 0; i < 1; i++) {
+    u64 start_idx = i * g_size / 2;
+    u64 end_idx = (i + 1) * std::min(g_size / 2, n);
+    for (u64 j = start_idx; j < end_idx; j++) {
+        u8 p = (u8)m.data[j];
+        i32 left = unpack_left(p);
+        i32 right = unpack_right(p);
+        printf("%d %d", left, right);
+    }
+  }
+  printf("\n");
+}
+
+void d_print_q4(QMatrix m, int n, int g_size) {
+  QMatrix h_m = new_matrix_q4(m.shape[0], m.shape[1], g_size);
+  copy_dtoh_q4(m, h_m, g_size);
+  print_q4(h_m, n, g_size);
+  free_matrix_q4(h_m);
+}
+
+
+void assert_approx(Matrix d_m, Matrix h_m) {
+  assert(d_m.shape[0] == h_m.shape[0]);
+  assert(d_m.shape[1] == h_m.shape[1]);
+  int n = h_m.shape[0] * h_m.shape[1];
+  float *h_data = (float *)malloc(n * sizeof(float));
+  cudaDeviceSynchronize();
+  cudaMemcpy(h_data, d_m.data, n * sizeof(float), cudaMemcpyDeviceToHost);
+  for (int i = 0; i < n; i++) {
+    if ( fabs(h_data[i] - h_m.data[i]) > 1e-2) {
+      printf("Mismatch at %d: %f %f\n", i, h_data[i], h_m.data[i]);
+    }
+  }
+}
+
+
+
+
+f32* device_forward_q4(QLLamaRuntime *d_rt, QLLamaRuntime* h_rt, i32 tok, i32 pos) {
+  QLLama *m = &d_rt->m;
+  int dim = m->params.dim;
+  int h_dim = m->params.hidden_dim;
+  int g_size = m->params.group_size;
+  int n_layers = m->params.n_layers;
+  int vocab_size = m->params.vocab_size;
+  int max_seq_len = m->params.max_seq_len;
+  int n_heads = m->params.n_heads;
+  int head_dim = dim / n_heads;
+
+  memset(h_rt->attention.data, 0, n_heads * max_seq_len * sizeof(f32));
+  QMatrix d_embedding = get_row_q4(d_rt->m.tok_embeddings, tok, g_size);
+  QMatrix h_embedding = get_row_q4(h_rt->m.tok_embeddings, tok, g_size);
+
+  d_dequantize_q4(d_rt->f_x.data, d_embedding.data, d_embedding.scales, dim, g_size);
+  dequantize_q4(h_rt->f_x.data, h_embedding.data, h_embedding.scales, dim,
+                g_size);
+
+  for (i32 l_id = 0; l_id < n_layers; l_id++) {
+    printf("layer: %d\n", l_id);
+    QEncoderBlock *h_layer = &h_rt->m.layers[l_id];
+    QEncoderBlock *d_layer = &d_rt->m.layers[l_id];
+    Matrix h_kcache = h_rt->kcaches[l_id];
+    Matrix h_vcache = h_rt->vcaches[l_id];
+    Matrix d_kcache = d_rt->kcaches[l_id];
+    Matrix d_vcache = d_rt->vcaches[l_id];
+
+    rms_norm(h_rt->f_x_buf.data, h_rt->f_x.data, h_layer->attention_norm.data,
+             dim);
+    // print_vec(h_rt->f_x_buf.data, 1000, 0);
+    d_rms_norm(d_rt->f_x_buf.data, d_rt->f_x.data, d_layer->attention_norm.data,
+               dim);
+    // d_print_mat(d_rt->f_x_buf, 1000);
+
+    quantize_q4(h_rt->q_x_buf.data, h_rt->q_x_buf.scales, h_rt->f_x_buf.data,
+                dim, g_size);
+
+    d_quantize_q4(d_rt->q_x_buf.data, d_rt->q_x_buf.scales, d_rt->f_x_buf.data,
+                  dim, g_size);
+
+    // print_q4(h_rt->q_x_buf, 50, g_size);
+    //print_vec(h_rt->q_x_buf.scales, 16, 0);
+   //d_print_q4(d_rt->q_x_buf, , g_size);
+    //d_print_vec(d_rt->q_x_buf.scales, 16);
+
+    Matrix h_k = get_row(h_kcache, pos);
+    Matrix h_v = get_row(h_vcache, pos);
+    Matrix d_k = get_row(d_kcache, pos);
+    Matrix d_v = get_row(d_vcache, pos);
+
+    // print_q4(h_layer->wq, 10, g_size);
+    // d_print_q4(d_layer->wq, 10, g_size);
+    // print_vec(h_layer->wq.scales, 10, 0);
+    // d_print_vec(d_layer->wq.scales, 10);
+
+    // print_q4(h_rt->q_x_buf, 10, g_size);
+    // d_print_q4(d_rt->q_x_buf, 10, g_size);
+    // print_vec(h_rt->q_x_buf.scales, 10, 0);
+    // d_print_vec(d_rt->q_x_buf.scales, 10);
+
+    matvec_mul_q4(h_layer->wq.data, h_layer->wq.scales, h_rt->q_x_buf.data,
+                  h_rt->q_x_buf.scales, h_rt->q.data, h_layer->wq.shape[0],
+                  h_layer->wq.shape[1], g_size);
+    matvec_mul_q4(h_layer->wk.data, h_layer->wk.scales, h_rt->q_x_buf.data,
+                  h_rt->q_x_buf.scales, h_k.data, h_layer->wk.shape[0],
+                  h_layer->wk.shape[1], g_size);
+    matvec_mul_q4(h_layer->wv.data, h_layer->wv.scales, h_rt->q_x_buf.data,
+                  h_rt->q_x_buf.scales, h_v.data, h_layer->wv.shape[0],
+                  h_layer->wv.shape[1], g_size);
+
+    d_matvec_mul_q4(d_layer->wq.data, d_layer->wq.scales, d_rt->q_x_buf.data,
+                    d_rt->q_x_buf.scales, d_rt->q.data, d_layer->wq.shape[0],
+                    d_layer->wq.shape[1], g_size);
+    d_matvec_mul_q4(d_layer->wk.data, d_layer->wk.scales, d_rt->q_x_buf.data,
+                  d_rt->q_x_buf.scales, d_k.data, d_layer->wk.shape[0],
+                  d_layer->wk.shape[1], g_size);
+    d_matvec_mul_q4(d_layer->wv.data, d_layer->wv.scales, d_rt->q_x_buf.data,
+                  d_rt->q_x_buf.scales, d_v.data, d_layer->wv.shape[0],
+                  d_layer->wv.shape[1], g_size);
+
+
+    rotate_embeddings(h_rt->q.data, pos, head_dim, dim);
+    rotate_embeddings(h_k.data, pos, head_dim, dim);
+    d_rotate_embeddings(d_rt->q.data, pos, head_dim, dim);
+    d_rotate_embeddings(d_k.data, pos, head_dim, dim);
+
+    d_compute_attention(d_rt->attention.data, d_rt->q.data, d_kcache.data,
+                        d_vcache.data, d_rt->f_x_buf.data, pos, n_heads,
+                        head_dim, d_rt->m.params.max_seq_len);
+
+    compute_attention(h_rt->attention.data, h_rt->q.data, h_kcache.data,
+                      h_vcache.data, h_rt->f_x_buf.data, pos, n_heads, head_dim,
+                      h_rt->m.params.max_seq_len);
+    printf("assert attention out\n");
+    assert_approx(d_rt->f_x_buf, h_rt->f_x_buf);
+    printf("assert attention\n");
+    assert_approx(d_rt->attention, h_rt->attention);
+    print_vec(h_rt->f_x_buf.data, 20, 0);
+    d_print_vec(d_rt->f_x_buf.data, 20);
+
+    quantize_q4(h_rt->q_x_buf.data, h_rt->q_x_buf.scales, h_rt->f_x_buf.data,
+                dim, g_size);
+    d_quantize_q4(d_rt->q_x_buf.data, d_rt->q_x_buf.scales, d_rt->f_x_buf.data,
+                  dim, g_size);
+
+  cudaDeviceSynchronize();
+    matvec_mul_q4(h_layer->wo.data, h_layer->wo.scales, h_rt->q_x_buf.data,
+              h_rt->q_x_buf.scales, h_rt->f_x_buf2.data, h_layer->wo.shape[0],
+              h_layer->wo.shape[1], g_size);
+    d_matvec_mul_q4(d_layer->wo.data, d_layer->wo.scales, d_rt->q_x_buf.data,
+                    d_rt->q_x_buf.scales, d_rt->f_x_buf2.data,
+                    d_layer->wo.shape[0], d_layer->wo.shape[1], g_size);
+
+    cudaDeviceSynchronize();
+    printf("assert wo\n");
+    assert_approx(d_rt->f_x_buf2, h_rt->f_x_buf2);
+
+    residual(h_rt->f_x.data, h_rt->f_x_buf2.data, dim);
+    d_residual(d_rt->f_x.data, d_rt->f_x_buf2.data, dim);
+
+    printf("assert residual\n");
+    assert_approx(d_rt->f_x, h_rt->f_x);
+
+  cudaDeviceSynchronize();
+    rms_norm(h_rt->f_x_buf.data, h_rt->f_x.data, h_layer->ffn_norm.data, dim);
+    d_rms_norm(d_rt->f_x_buf.data, d_rt->f_x.data, d_layer->ffn_norm.data, dim);
+
+
+    printf("assert norm2\n");
+  cudaDeviceSynchronize();
+    assert_approx(d_rt->f_x_buf, h_rt->f_x_buf);
+
+
+    quantize_q4(h_rt->q_x_buf.data, h_rt->q_x_buf.scales, h_rt->f_x_buf.data, dim,
+                g_size);
+    d_quantize_q4(d_rt->q_x_buf.data, d_rt->q_x_buf.scales, d_rt->f_x_buf.data, dim,
+                g_size);
+
+  cudaDeviceSynchronize();
+
+    matvec_mul_q4(h_layer->w1.data, h_layer->w1.scales, h_rt->q_x_buf.data,
+                  h_rt->q_x_buf.scales, h_rt->f_h_buf.data, h_layer->w1.shape[0],
+                  h_layer->w1.shape[1], g_size);
+    d_matvec_mul_q4(d_layer->w1.data, d_layer->w1.scales, d_rt->q_x_buf.data,
+                    d_rt->q_x_buf.scales, d_rt->f_h_buf.data,
+                    d_layer->w1.shape[0], d_layer->w1.shape[1], g_size);
+
+
+    matvec_mul_q4(h_layer->w3.data, h_layer->w3.scales, h_rt->q_x_buf.data,
+                  h_rt->q_x_buf.scales, h_rt->f_h_buf2.data, h_layer->w3.shape[0],
+                  h_layer->w3.shape[1], g_size);
+    d_matvec_mul_q4(d_layer->w3.data, d_layer->w3.scales, d_rt->q_x_buf.data,
+                    d_rt->q_x_buf.scales, d_rt->f_h_buf2.data,
+                    d_layer->w3.shape[0], d_layer->w3.shape[1], g_size);
+
+    printf("assert hidden\n");
+    assert_approx(d_rt->f_h_buf, h_rt->f_h_buf);
+    assert_approx(d_rt->f_h_buf2, h_rt->f_h_buf2);
+
+    swiglu(h_rt->f_h_buf.data, h_rt->f_h_buf2.data, h_dim);
+    d_swiglu(d_rt->f_h_buf.data, d_rt->f_h_buf2.data, h_dim);
+
+    printf("assert swiglu\n");
+    assert_approx(d_rt->f_h_buf, h_rt->f_h_buf);
+
+    quantize_q4(h_rt->q_h_buf.data, h_rt->q_h_buf.scales, h_rt->f_h_buf.data, h_dim,
+            g_size);
+    d_quantize_q4(d_rt->q_h_buf.data, d_rt->q_h_buf.scales, d_rt->f_h_buf.data, h_dim,
+            g_size);
+
+    matvec_mul_q4(h_layer->w2.data, h_layer->w2.scales, h_rt->q_h_buf.data,
+                  h_rt->q_h_buf.scales, h_rt->f_x_buf.data, h_layer->w2.shape[0],
+                  h_layer->w2.shape[1], g_size);
+    d_matvec_mul_q4(d_layer->w2.data, d_layer->w2.scales, d_rt->q_h_buf.data,
+                    d_rt->q_h_buf.scales, d_rt->f_x_buf.data,
+                    d_layer->w2.shape[0], d_layer->w2.shape[1], g_size);
+
+    residual(h_rt->f_x.data, h_rt->f_x_buf.data, dim);
+    d_residual(d_rt->f_x.data, d_rt->f_x_buf.data, dim);
+    printf("assert last residual\n");
+    assert_approx(d_rt->f_x, h_rt->f_x);
+    // d_print_vec(d_rt->f_x.data, 20);
+    // print_vec(h_rt->f_x.data, 20, 0);
+    // print_vec(h_rt->q.data, 300, 0);
+    // d_print_vec(d_rt->q.data, 300);
+  }
+  // d_print_vec(d_rt->f_x.data, 20);
+  // print_vec(h_rt->f_x.data, 20, 0);
+
+  rms_norm(h_rt->f_x.data, h_rt->f_x.data, h_rt->m.norm.data, dim);
+  d_rms_norm(d_rt->f_x.data, d_rt->f_x.data, d_rt->m.norm.data, dim);
+
+  printf("asser out norm\n");
+  assert_approx(d_rt->f_x, h_rt->f_x);
+
+  quantize_q4(h_rt->q_x.data, h_rt->q_x.scales, h_rt->f_x.data, dim, g_size);
+  d_quantize_q4(d_rt->q_x.data, d_rt->q_x.scales, d_rt->f_x.data, dim, g_size);
+
+  matvec_mul_q4(h_rt->m.output_weights.data, h_rt->m.output_weights.scales,
+                h_rt->q_x.data, h_rt->q_x.scales, h_rt->logits.data,
+                h_rt->m.output_weights.shape[0], h_rt->m.output_weights.shape[1],
+                g_size);
+  d_matvec_mul_q4(d_rt->m.output_weights.data, d_rt->m.output_weights.scales,
+                d_rt->q_x.data, d_rt->q_x.scales, d_rt->logits.data,
+                d_rt->m.output_weights.shape[0], d_rt->m.output_weights.shape[1],
+                g_size);
+
+  // print_q4(h_rt->m.output_weights, 20, g_size);
+  // d_print_q4(d_rt->m.output_weights, 20, g_size);
+  printf("result: %d\n", pos);
+  d_print_vec(d_rt->logits.data, 20);
+  print_vec(h_rt->logits.data, 20, 0);
+  return d_rt->logits.data;
+}
+
+f32* ddevice_forward_q4(QLLamaRuntime *d_rt, i32 tok, i32 pos) {
+  QLLama *m = &d_rt->m;
+  int dim = m->params.dim;
+  int h_dim = m->params.hidden_dim;
+  int g_size = m->params.group_size;
+  int n_layers = m->params.n_layers;
+  int n_heads = m->params.n_heads;
+  int head_dim = dim / n_heads;
+
+  QMatrix d_embedding = get_row_q4(d_rt->m.tok_embeddings, tok, g_size);
+  cudaDeviceSynchronize();
+  d_dequantize_q4(d_rt->f_x.data, d_embedding.data, d_embedding.scales, dim, g_size);
+
+  for (i32 l_id = 0; l_id < n_layers; l_id++) {
+    QEncoderBlock *d_layer = &d_rt->m.layers[l_id];
+    Matrix d_kcache = d_rt->kcaches[l_id];
+    Matrix d_vcache = d_rt->vcaches[l_id];
+
+
+    cudaDeviceSynchronize();
+    d_rms_norm(d_rt->f_x_buf.data, d_rt->f_x.data, d_layer->attention_norm.data,
+               dim);
+
+    cudaDeviceSynchronize();
+    d_quantize_q4(d_rt->q_x_buf.data, d_rt->q_x_buf.scales, d_rt->f_x_buf.data,
+                  dim, g_size);
+    // print_q4(h_rt->q_x_buf, 50, g_size);
+    //print_vec(h_rt->q_x_buf.scales, 16, 0);
+   //d_print_q4(d_rt->q_x_buf, , g_size);
+    //d_print_vec(d_rt->q_x_buf.scales, 16);
+
+
+    Matrix d_k = get_row(d_kcache, pos);
+    Matrix d_v = get_row(d_vcache, pos);
+
+    cudaDeviceSynchronize();
+    d_matvec_mul_q4(d_layer->wq.data, d_layer->wq.scales, d_rt->q_x_buf.data,
+                    d_rt->q_x_buf.scales, d_rt->q.data, d_layer->wq.shape[0],
+                    d_layer->wq.shape[1], g_size);
+    d_matvec_mul_q4(d_layer->wk.data, d_layer->wk.scales, d_rt->q_x_buf.data,
+                  d_rt->q_x_buf.scales, d_k.data, d_layer->wk.shape[0],
+                  d_layer->wk.shape[1], g_size);
+    d_matvec_mul_q4(d_layer->wv.data, d_layer->wv.scales, d_rt->q_x_buf.data,
+                  d_rt->q_x_buf.scales, d_v.data, d_layer->wv.shape[0],
+                  d_layer->wv.shape[1], g_size);
+
+    cudaDeviceSynchronize();
+    d_rotate_embeddings(d_rt->q.data, pos, head_dim, dim);
+    d_rotate_embeddings(d_k.data, pos, head_dim, dim);
+
+    cudaDeviceSynchronize();
+    d_compute_attention(d_rt->attention.data, d_rt->q.data, d_kcache.data,
+                        d_vcache.data, d_rt->f_x_buf.data, pos, n_heads,
+                        head_dim, d_rt->m.params.max_seq_len);
+
+
+    cudaDeviceSynchronize();
+    d_quantize_q4(d_rt->q_x_buf.data, d_rt->q_x_buf.scales, d_rt->f_x_buf.data,
+                  dim, g_size);
+
+    cudaDeviceSynchronize();
+    d_matvec_mul_q4(d_layer->wo.data, d_layer->wo.scales, d_rt->q_x_buf.data,
+                    d_rt->q_x_buf.scales, d_rt->f_x_buf2.data,
+                    d_layer->wo.shape[0], d_layer->wo.shape[1], g_size);
+
+    cudaDeviceSynchronize();
+    d_residual(d_rt->f_x.data, d_rt->f_x_buf2.data, dim);
+
+    cudaDeviceSynchronize();
+    d_rms_norm(d_rt->f_x_buf.data, d_rt->f_x.data, d_layer->ffn_norm.data, dim);
+
+
+    cudaDeviceSynchronize();
+    d_quantize_q4(d_rt->q_x_buf.data, d_rt->q_x_buf.scales, d_rt->f_x_buf.data, dim,
+                g_size);
+
+    cudaDeviceSynchronize();
+    d_matvec_mul_q4(d_layer->w1.data, d_layer->w1.scales, d_rt->q_x_buf.data,
+                    d_rt->q_x_buf.scales, d_rt->f_h_buf.data,
+                    d_layer->w1.shape[0], d_layer->w1.shape[1], g_size);
+    d_matvec_mul_q4(d_layer->w3.data, d_layer->w3.scales, d_rt->q_x_buf.data,
+                    d_rt->q_x_buf.scales, d_rt->f_h_buf2.data,
+                    d_layer->w3.shape[0], d_layer->w3.shape[1], g_size);
+
+    cudaDeviceSynchronize();
+    d_swiglu(d_rt->f_h_buf.data, d_rt->f_h_buf2.data, h_dim);
+
+
+    cudaDeviceSynchronize();
+    d_quantize_q4(d_rt->q_h_buf.data, d_rt->q_h_buf.scales, d_rt->f_h_buf.data, h_dim,
+            g_size);
+
+    cudaDeviceSynchronize();
+    d_matvec_mul_q4(d_layer->w2.data, d_layer->w2.scales, d_rt->q_h_buf.data,
+                    d_rt->q_h_buf.scales, d_rt->f_x_buf.data,
+                    d_layer->w2.shape[0], d_layer->w2.shape[1], g_size);
+
+    cudaDeviceSynchronize();
+    d_residual(d_rt->f_x.data, d_rt->f_x_buf.data, dim);
+  }
+
+  cudaDeviceSynchronize();
+  d_rms_norm(d_rt->f_x.data, d_rt->f_x.data, d_rt->m.norm.data, dim);
+
+  cudaDeviceSynchronize();
+  d_quantize_q4(d_rt->q_x.data, d_rt->q_x.scales, d_rt->f_x.data, dim, g_size);
+
+  cudaDeviceSynchronize();
+  d_matvec_mul_q4(d_rt->m.output_weights.data, d_rt->m.output_weights.scales,
+                d_rt->q_x.data, d_rt->q_x.scales, d_rt->logits.data,
+                d_rt->m.output_weights.shape[0], d_rt->m.output_weights.shape[1],
+                g_size);
+  d_print_vec(d_rt->logits.data, 20);
+  cudaDeviceSynchronize();
+  return d_rt->logits.data;
+}
+
+i32* generate_greedy_q4(QLLamaRuntime* d_rt, i32 *tokens, u32 n_toks, u32 max_toks) {
+  i32 *res = (i32*)malloc(max_toks * sizeof(i32));
+  float* h_logits = (float*)malloc(d_rt->m.params.vocab_size * sizeof(float));
+  u32 pos = 0;
+  for (; pos < n_toks; pos++) {
+    float *logits = ddevice_forward_q4(d_rt, tokens[pos], pos);
+    res[pos] = tokens[pos];
+  }
+  printf("Done with input\n");
+  for (; pos < max_toks; pos++) {
+    float *d_logits = ddevice_forward_q4(d_rt, res[pos - 1], pos);
+    cudaMemcpy(h_logits, d_logits, d_rt->m.params.vocab_size, cudaMemcpyDeviceToHost);
+    Matrix mat = {h_logits, {1, 32000}};
+    softmax(mat.data, 32000);
+    int max_idx = 0;
+    float max_val = mat.data[0];
+    for (int i = 1; i < 32000; i++) {
+      if (mat.data[i] > max_val) {
+        max_val = mat.data[i];
+        max_idx = i;
+      }
+    }
+    res[pos] = max_idx;
+  }
+  return res;
+}
+
+
+
+int main() {
+  // print_device_info();
+  MappedFile in;
+  init(&in, "../../bin/llama_q4.bin");
+  QLLama h_m;
+  qllama_init(&h_m, in.data, in.len);
+  QLLama d_m;
+  qllama_init_device(&d_m, &h_m);
+  QLLamaRuntime d_rt;
+  device_runtime_init_q4(&d_rt, &d_m);
+  QLLamaRuntime h_rt;
+  runtime_init_q4(&h_rt, &h_m);
+  i32 input[] = {6123, 5169, 948, 1171, 471, 263};
+  Timer t;
+  start_timer(&t);
+
+  // device_forward_q4(&d_rt, &h_rt, 6780, 0);
+  // device_forward_q4(&d_rt, &h_rt, 5823, 1);
+  // device_forward_q4(&d_rt, &h_rt, 6223, 2);
+
+
+
+  i32 *res = generate_greedy_q4(&d_rt, input, 6, 30);
+
+  i32 expect[] = {6123, 5169, 948, 1171, 471, 263, 4824, 293, 391, 1058, 2113,
+  278, 27813, 20604, 297, 29871, 29896, 29929, 29953, 29945, 363, 670, 664,
+  373, 12101, 3546, 5964, 2926, 1199, 29889};
+
+  for (int i = 0; i < 30; i++) {
+    printf("%d, ", res[i]);
+  }
+  printf("\n");
+  stop_timer(&t);
+  printf("Time: %d ms \n", elapsed_time(&t));
+
+
+  // QMatrix m = new_matrix_q4_device(1, 1024, 32);
+  // Matrix m2 = new_matrix_device(1, 1024);
+  // d_dequantize_q4(m2.data, m.data, m.scales, 1024, 32);
+
+  return 0;
+}
