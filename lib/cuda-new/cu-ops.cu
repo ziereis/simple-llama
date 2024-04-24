@@ -1,5 +1,4 @@
 #include "cu-ops.h"
-#include <__clang_cuda_builtin_vars.h>
 #include <cassert>
 #include <cfloat>
 #include <cuda_device_runtime_api.h>

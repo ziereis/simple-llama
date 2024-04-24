@@ -1,13 +1,13 @@
-import torch
-from sentencepiece import SentencePieceProcessor
-import argparse
-import numpy as np
-import os
-from qllama import Runtime, CreateRuntime
+from qllama import CreateRuntime
 from llama_utils import load_tokenizer
+from qllama import Runtime, CreateRuntime
+import os
+import numpy as np
+import torch
 
 tokenizer = load_tokenizer("bin/tokenizer.model")
 
+rt = CreateRuntime("bin/chat-llama_q4.bin", device="gpu")
 
 def generate_greedy(llama: Runtime, prompt: str, max_toks: int = 30) -> str:
   input_tokens = tokenizer.encode(prompt)
@@ -33,6 +33,7 @@ def generate_greedy(llama: Runtime, prompt: str, max_toks: int = 30) -> str:
   os.system('clear')
   print(tokenizer.decode(output_tokens))
   return tokenizer.decode(output_tokens)
+
 
 def generate_top_p(llama: Runtime, prompt: str, max_toks: int = 30, temperature: float = 0.1, top_p: float = 0.90) -> str:
   input_tokens = tokenizer.encode(prompt)
@@ -75,33 +76,15 @@ def sample_top_p(probs, p):
   next_token = torch.gather(probs_idx, -1, next_token)
   return next_token.item()
 
-# TODO: requirements.txt
-# TODO: Fix bug generate printing
-# TODO: Chris - add nice print statements + docstrings
-# TODO: Chris - Tokenizer
-# TODO: Chris - Checkout how quantization works
-# TODO: Update README
-
-# TODO: Thomas - GPU
-# TODO: EVAL: runtime, attention, feedforward, layer time, first_token
-# TODO: EVAL: inference_strategies (greedy vs. top-p)
-# TODO: EVAL: benchmark MMLU: Augenmaß 32bit vs. 16bit vs. 8bit vs. 4bit
-# TODO: EVAL: benchmark MMLU: LLaMA.cpp vs. own-implementation - das auch als Outlook nehmen
-
-# TODO Bericht: Quantization erklärt + easy parallelization + by group to shrink error. wie sieht quantized forward pass aus, an welchen Stellen quant. vs. dequant., etc.
-
-# TODO: implement chat-llama like function
 
 
-if __name__ == "__main__":
-  parser = argparse.ArgumentParser()
-  parser.add_argument("--bin", type=str, help="path to exported llama f32 weights", default= "bin/chat-llama_q4.bin")
-  parser.add_argument("--max-toks" , type=int, help="max tokens to generate", default=1000)
-  parser.add_argument("prompt", type=str, nargs='*', help="prompt to generate from")
 
-  args = parser.parse_args()
-  full_prompt = ' '.join(args.prompt) if args.prompt else None
+sys_input = "you are an export python programmer and help me write python code"
 
-  rt = CreateRuntime(args.bin)
+sys_packed = f"[INST] <<SYS>> {sys_input} <<SYS>> [/INST]"
 
-  generate_top_p(rt, full_prompt, max_toks=args.max_toks, temperature=0.8, top_p=0.80)
+chat_input = "how to reverse a linked list in python?"
+
+chat_packed = f"[INST] {chat_input} [/INST]"
+
+print(generate_top_p(rt, chat_packed, 500, 0.3, 0.9))

@@ -23,9 +23,9 @@ if __name__ == "__main__":
   args = parser.parse_args()
 
   if (args.q == 8):
-    quant_q8(args.bin, "bin/llama_q8.bin")
+    quant_q8(args.bin, args.bin.replace(".bin", "_q8.bin"))
   elif (args.q== 4):
-    quant_q4(args.bin, "bin/llama_q4.bin")
+    quant_q4(args.bin, args.bin.replace(".bin", "_q4.bin"))
   else:
     print("Invalid quantization value")
     exit(1)

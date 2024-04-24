@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef double f64;
 typedef float f32;
 typedef int64_t i64;
@@ -107,3 +111,7 @@ typedef struct {
 
 bool init(MappedFile *file, const char *path);
 void deinit(MappedFile *file);
+
+#ifdef __cplusplus
+}
+#endif

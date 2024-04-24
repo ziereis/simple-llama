@@ -1,6 +1,8 @@
 #pragma once
 #include "utils.h"
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct __attribute__((__packed__)){
   i32 dim;
@@ -69,6 +71,7 @@ typedef struct {
   Matrix f_h_buf;
   Matrix f_h_buf2;
   Matrix logits;
+  Matrix logits_out; // only used in cuda rt
   Matrix attention;
 
   Matrix kcaches[32];
@@ -113,10 +116,14 @@ void* runtime_new_f32(const char* filename);
 void runtime_delete_f32(void* handle);
 float *runtime_forward_f32(void *handle, int tok, int pos);
 
-void* runtime_new_f32(const char* filename);
-void runtime_delete_f32(void* handle);
-float* runtime_forward_f32(void* handle, int tok, int pos);
+void* runtime_new_q8(const char* filename);
+void runtime_delete_q8(void* handle);
+float* runtime_forward_q8(void* handle, int tok, int pos);
 
-void* runtime_new_f32(const char* filename);
-void runtime_delete_f32(void* handle);
-float* runtime_forward_f32(void* handle, int tok, int pos);
+void* runtime_new_q4(const char* filename);
+void runtime_delete_q4(void* handle);
+float *runtime_forward_q4(void *handle, int tok, int pos);
+
+#ifdef __cplusplus
+}
+#endif

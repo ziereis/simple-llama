@@ -1,5 +1,5 @@
-CC=clang
-CFLAGS=-g -fopenmp # Ensure flags are consistent for all compilations if needed
+CC=clang-14
+CFLAGS=-g -fopenmp -O3# Ensure flags are consistent for all compilations if needed
 CUDA_PATH=/usr/local/cuda
 LDFLAGS=-L$(CUDA_PATH)/lib64 -L/usr/lib/llvm-14/lib -lcudart -lcublas -lm
 INCLUDES=-I$(CUDA_PATH)/include

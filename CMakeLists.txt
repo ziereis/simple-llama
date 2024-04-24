@@ -1,10 +1,14 @@
 cmake_minimum_required(VERSION 3.22)
-project(simple-llama C)
+project(cu_llama_app LANGUAGES CXX C CUDA)
 
 # Enable export of compile commands
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_BUILD_TYPE Release)
+
+set(CMAKE_CUDA_ARCHITECTURES 50)
+include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+
 
 # Find the OpenMP package
 find_package(OpenMP REQUIRED)
@@ -27,6 +31,13 @@ include_directories(${CMAKE_SOURCE_DIR})
 add_library(llama SHARED lib/llama.c lib/utils.c lib/ops.c)
 configure_target(llama)
 
+add_library(cu_llama SHARED lib/cuda-new/cu-llama.cu lib/cuda-new/cu-ops.cu lib/utils.c lib/llama.c lib/ops.c)
+set_target_properties(cu_llama PROPERTIES
+                      CUDA_SEPARABLE_COMPILATION ON)
+
+set_target_properties(cu_llama PROPERTIES
+                      CXX_STANDARD 14
+                      CXX_STANDARD_REQUIRED ON)
 # Quantize library
 add_library(quantize SHARED lib/quantize.c lib/utils.c lib/ops.c)
 configure_target(quantize)

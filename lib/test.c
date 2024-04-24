@@ -319,8 +319,5 @@ int main() {
   // qllama_init(&m, in.data, in.len);
   // QLLamaRuntime rt;
   // runtime_init_q8(&rt, &m);
-  QLLama dev_m;
-  QLLama host_m;
-  qllama_init_device(&dev_m, &host_m);
   return 0;
 }
