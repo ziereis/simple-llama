@@ -4,3 +4,4 @@ venv/
 tokenizer.model
 bin/
 build/
+.idea/
