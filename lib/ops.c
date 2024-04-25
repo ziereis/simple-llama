@@ -31,13 +31,13 @@ void matvec_mul(f32* weights, f32* x, f32* out, i32 m, i32 n) {
   }
 }
 
-void matvec_mul_q8(i8 *restrict w, f32 *restrict w_s, i8 *restrict x, f32 *restrict x_s, f32 *restrict out, int m, int n, u32 group_size) {
+void matvec_mul_q8(i8  * w, f32  * w_s, i8  * x, f32  * x_s, f32  * out, int m, int n, u32 group_size) {
   u32 groups_per_row = n / group_size;
 
 #pragma omp parallel for schedule(static)
   for (i32 i = 0; i < m; i++) {
-    i8 *restrict w_row = w + i * n;
-    f32 *restrict w_s_row = w_s + i * n / group_size;
+    i8  * w_row = w + i * n;
+    f32  * w_s_row = w_s + i * n / group_size;
     f32 faccum = 0.0f;
     for (u32 g_idx = 0; g_idx < groups_per_row; g_idx++) {
       i32 iaccum = 0;
@@ -57,14 +57,14 @@ void matvec_mul_q8(i8 *restrict w, f32 *restrict w_s, i8 *restrict x, f32 *restr
 #define unpack_right(in) (in & 0x0f) - 8
 #define pack_q4(left, right) (((((u8)left) + 8) << 4) | (((u8)right) + 8))
 
-void matvec_mul_q4(i8 *restrict w, f32 *restrict w_s, i8 *restrict x, f32 *restrict x_s, f32 *restrict out, int m, int n, u32 group_size) {
+void matvec_mul_q4(i8  * w, f32  * w_s, i8  * x, f32  * x_s, f32  * out, int m, int n, u32 group_size) {
 
   u32 groups_per_row = n / group_size;
 
 #pragma omp parallel for schedule(static)
   for (i32 i = 0; i < m; i++) {
-    i8 *restrict w_row = w + i * n / 2;
-    f32 *restrict w_s_row = w_s + i * n / group_size;
+    i8  * w_row = w + i * n / 2;
+    f32  * w_s_row = w_s + i * n / group_size;
     f32 faccum = 0.0f;
     for (u32 g_idx = 0; g_idx < groups_per_row; g_idx++) {
       i32 iaccum = 0;
@@ -102,7 +102,7 @@ void softmax(f32* x, i32 n) {
   }
 }
 
-void dequantize_q8(f32 *restrict out, i8 *restrict in, f32 *restrict scales,
+void dequantize_q8(f32  * out, i8  * in, f32  * scales,
                    u64 n, i32 group_size) {
   u64 n_groups = n / group_size;
 
@@ -116,7 +116,7 @@ void dequantize_q8(f32 *restrict out, i8 *restrict in, f32 *restrict scales,
   }
 }
 
-void quantize_q8(i8 *restrict out, f32 *restrict scales, f32 *restrict in,
+void quantize_q8(i8  * out, f32  * scales, f32  * in,
                  u64 n, i32 group_size) {
   u64 n_groups = n / group_size;
 #pragma omp parallel for schedule(static)
@@ -137,7 +137,7 @@ void quantize_q8(i8 *restrict out, f32 *restrict scales, f32 *restrict in,
   }
 }
 
-void quantize_q4(i8 *restrict out, f32 *restrict scales, f32 *restrict in,
+void quantize_q4(i8  * out, f32  * scales, f32  * in,
                  u64 n, i32 group_size) {
   assert(n % 2 == 0);
   assert(group_size % 2 == 0);
@@ -162,7 +162,7 @@ void quantize_q4(i8 *restrict out, f32 *restrict scales, f32 *restrict in,
   }
 }
 
-void dequantize_q4(f32 *restrict out, i8 *restrict in, f32 *restrict scales,
+void dequantize_q4(f32  * out, i8  * in, f32  * scales,
                    u64 n, i32 group_size) {
   u64 n_groups = n / group_size;
 #pragma omp parallel for schedule(static)
@@ -187,10 +187,10 @@ void compute_attention(f32 *att, f32 *q, f32 *kcache, f32 *vcache, f32 *out,
   int dim = n_heads * head_dim;
   #pragma omp parallel for schedule(static)
   for (int i = 0; i < n_heads; i++) {
-    f32 *restrict q_head = q + i * head_dim;
-    f32 *restrict curr_att = att + i * max_seq_len;
+    f32  * q_head = q + i * head_dim;
+    f32  * curr_att = att + i * max_seq_len;
     for (int t = 0; t <= pos; t++) {
-      f32 *restrict k_head = kcache + dim * t + i * head_dim;
+      f32  * k_head = kcache + dim * t + i * head_dim;
       float score = 0;
       for (int j = 0; j < head_dim; j++) {
         score += q_head[j] * k_head[j];
@@ -201,11 +201,11 @@ void compute_attention(f32 *att, f32 *q, f32 *kcache, f32 *vcache, f32 *out,
 
     softmax(curr_att, pos + 1);
 
-    f32 *restrict out_head = out + i * head_dim;
+    f32  * out_head = out + i * head_dim;
     memset(out_head, 0, head_dim * sizeof(float));
 
     for (int t = 0; t <= pos; t++) {
-      f32 *restrict v_head = vcache + dim * t + i * head_dim;
+      f32  * v_head = vcache + dim * t + i * head_dim;
       float score = curr_att[t];
       for (int j = 0; j < head_dim; j++) {
         out_head[j] += score * v_head[j];

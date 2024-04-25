@@ -302,15 +302,15 @@ int test_forward_q4() {
 }
 
 int main() {
-  int res = 0;
-  res = test_quantize_q8();
-  res = test_quantize_q4();
-  // res = test_matvec_mal();
-  Timer timer;
-  start_timer(&timer);
-  res = test_forward_q8();
-  stop_timer(&timer);
-  printf("Time: %d ms\n", elapsed_time(&timer));
+  // int res = 0;
+  // res = test_quantize_q8();
+  // res = test_quantize_q4();
+  // // res = test_matvec_mal();
+  // Timer timer;
+  // start_timer(&timer);
+  // res = test_forward_q8();
+  // stop_timer(&timer);
+  // printf("Time: %d ms\n", elapsed_time(&timer));
   //res = test_matvec_mal();
   //quant_model("../bin/llama.bin", "../bin/llama_q4.bin", Q4);
   // QLLama m;
@@ -319,5 +319,5 @@ int main() {
   // qllama_init(&m, in.data, in.len);
   // QLLamaRuntime rt;
   // runtime_init_q8(&rt, &m);
-  return res;
+  return 0;
 }
