@@ -6,7 +6,6 @@ import os
 from qllama import Runtime, CreateRuntime
 from llama_utils import load_tokenizer
 import time
-import curses
 
 tokenizer = load_tokenizer("bin/tokenizer.model")
 
@@ -142,3 +141,4 @@ if __name__ == "__main__":
   chat_packed = f"[INST] {full_prompt} [/INST]"
 
   generate_text(rt, chat_packed, max_toks=args.max_toks, method="top_k")
+  # call: echo 1 | sudo tee /proc/sys/vm/drop_caches > /dev/null to make fair comparison
