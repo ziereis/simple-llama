@@ -1,12 +1,34 @@
+# Requirements
+* linux (might run on mac aswell)
+* python3
+* pip
+* a c compiler (tested on gcc and clang)
+#### optional:
+* cuda(nvcc) for GPU support
 
-* create a bin folder in the root dir
-* copy your meta llama-2-7b folder and tokenizer.model file there
-* export.py to convert the meta llama model to a fp32 base version
-* quantize.py to convert fp32 version to int8 quantized version
-* run.py run inference (sentence completion)
+# Usage guide:
+1. run pip install -r requirements.txt
+2. download the meta llama2 7B [weights](https://llama.meta.com/llama-downloads), we **highly recommend to download the llama2-7b-chat** model since the output of this model is way better than the base model, even just for text generation
+3. After downloading the model create a /bin directory in the project root and move the llama-2-7b-chat directory and the tokenizer.model file into the /bin dir
+4. Export the model weights into a our binary file format by running export.py (use --h for a usage guide)
+5. Compile the c/cuda library which is used for quantization and model inference by running the following commands:
+```
+mkdir build && cd build
+cmake .. -DCUDA=ON # with cuda runtime
+cmake .. # without cuda
+make
+```
+6. You can now run text completion using the base model using the follwing command:
+```
+python3 run.py --bin=bin/chat-llama.bin "Richard Feynman was a "
+```
+* This works but is very slow, so we suggest you to quantize the model weights by running quantize.py (--h for usage info) we have a forward pass implemented for 8bit and 4bit quantization
+* note that for GPUs we did only implement a 4bit forward pass since we would not be able to test any larger weight file due to hardware constraints. Nevertheless this has the advantage that this runs on almost any GPU since this only require around 6GB of VRAM
+* consider adjusting the paramters of the text generation like top_p and temperature to improve inference quality
+* to use the instruction finetuning of the model have a look at the file chat.py
+* to learn more about llama2 consider taking a look at the model.py file which contains a very easy to understand forward pass in pytorch
+# LLama2 model information
 
-
-### state dict contains the following weights:
 
 #### Input
 * tok_embeddings (vocab_size, embedding_dim) = (32000,4096)
@@ -27,11 +49,12 @@
 
 
 
-## Outputs kek
+### Outputs
 * norm (embedding_dim) = (4096)
 * output (embedding_dim, vocab_size) = (4096, 32000)
 
-References:
+# References:
+
 * https://github.com/karpathy/llama2.c
 * https://youtu.be/kCc8FmEb1nY
 * https://youtu.be/oM4VmoabDAI

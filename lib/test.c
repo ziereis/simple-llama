@@ -85,7 +85,7 @@ i32* generate_greedy(LLamaRuntime* rt, i32 *tokens, u32 n_toks, u32 max_toks) {
   i32 *res = malloc(max_toks * sizeof(i32));
   u32 pos = 0;
   for (; pos < n_toks; pos++) {
-    float *logits = forward_f32(rt, tokens[pos], pos);
+    (void)forward_f32(rt, tokens[pos], pos);
     res[pos] = tokens[pos];
   }
   for (; pos < max_toks; pos++) {
@@ -109,7 +109,7 @@ i32* generate_greedy_q8(QLLamaRuntime* rt, i32 *tokens, u32 n_toks, u32 max_toks
   i32 *res = malloc(max_toks * sizeof(i32));
   u32 pos = 0;
   for (; pos < n_toks; pos++) {
-    float *logits = forward_q8(rt, tokens[pos], pos);
+    (void)forward_q8(rt, tokens[pos], pos);
     res[pos] = tokens[pos];
   }
   for (; pos < max_toks; pos++) {
@@ -133,7 +133,7 @@ i32* generate_greedy_q4(QLLamaRuntime* rt, i32 *tokens, u32 n_toks, u32 max_toks
   i32 *res = malloc(max_toks * sizeof(i32));
   u32 pos = 0;
   for (; pos < n_toks; pos++) {
-    float *logits = forward_q4(rt, tokens[pos], pos);
+    (void)forward_q4(rt, tokens[pos], pos);
     res[pos] = tokens[pos];
   }
   for (; pos < max_toks; pos++) {
@@ -261,9 +261,6 @@ int test_forward_q8() {
 
    i32 *res = generate_greedy_q8(&rt, input, 6, 30);
 
-  i32 expect[] = {6123, 5169, 948, 1171, 471, 263, 4824, 293, 391, 1058, 2113,
-  278, 27813, 20604, 297, 29871, 29896, 29929, 29953, 29945, 363, 670, 664,
-  373, 12101, 3546, 5964, 2926, 1199, 29889};
 
   for (int i = 0; i < 30; i++) {
     printf("%d ", res[i]);
@@ -289,9 +286,6 @@ int test_forward_q4() {
 
   i32 *res = generate_greedy_q4(&rt, input, 6, 30);
 
-  i32 expect[] = {6123, 5169, 948, 1171, 471, 263, 4824, 293, 391, 1058, 2113,
-  278, 27813, 20604, 297, 29871, 29896, 29929, 29953, 29945, 363, 670, 664,
-  373, 12101, 3546, 5964, 2926, 1199, 29889};
 
   for (int i = 0; i < 30; i++) {
     printf("%d, ", res[i]);

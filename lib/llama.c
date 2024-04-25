@@ -58,7 +58,7 @@ bool llama_init(LLama *m, u8 *data, u64 size) {
   u64 offset_w2 = offset_w1 + SIZE_WEIGHTS_H_LAYER_F32;
   u64 offset_w3 = offset_w2 + SIZE_WEIGHTS_H_LAYER_F32;
   u64 offset_end = offset_w3 + SIZE_WEIGHTS_H_LAYER_F32;
-
+  (void)offset_end;
   assert(offset_end == size);
 
   init_mat(&m->norm, 1, dim, data, offset_norm);

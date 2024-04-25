@@ -31,13 +31,5 @@ if __name__ == "__main__":
 
   rt = CreateRuntime(args.bin)
 
-  sys_input = "you are an export python programmer and help me write python code"
-
-  sys_packed = f"[INST] <<SYS>> {sys_input} <<SYS>> [/INST]"
-
-  chat_input = "how to reverse a linked list in python?"
-
-  chat_packed = f"[INST] {full_prompt} [/INST]"
-
   # call: echo 1 | sudo tee /proc/sys/vm/drop_caches > /dev/null to make fair comparison
-  generate_text(rt, chat_packed, args.max_toks, method='top_p', temperature=0.3, top_p=0.9)
+  generate_text(rt, full_prompt, args.max_toks, method='top_p', temperature=0.3, top_p=0.9)
