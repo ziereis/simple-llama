@@ -14,7 +14,7 @@ find_package(OpenMP REQUIRED)
 # Function to setup target properties
 function(configure_target target_name)
     target_compile_options(${target_name} PUBLIC
-        -Wall -Wextra -g -Wpedantic
+        -Wall -Wextra -Wpedantic
         -fdiagnostics-color=always
         -march=native -ffast-math -fPIC
     )
