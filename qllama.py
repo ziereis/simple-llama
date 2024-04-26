@@ -1,19 +1,22 @@
 from abc import ABC, abstractmethod
 import ctypes
 import numpy as np
+import os
 
 # Load the library
 lib = ctypes.CDLL('build/libllama.so')
-cu_lib = ctypes.CDLL('build/libcu_llama.so')
 
-cu_lib.device_runtime_new_q4.argtypes = [ctypes.c_char_p]
-cu_lib.device_runtime_new_q4.restype = ctypes.c_void_p
+if os.path.exists('build/libcu_llama.so'):
+    cu_lib = ctypes.CDLL('build/libcu_llama.so')
 
-cu_lib.device_runtime_delete_q4.argtypes = [ctypes.c_void_p]
-cu_lib.device_runtime_delete_q4.restype = None
+    cu_lib.device_runtime_new_q4.argtypes = [ctypes.c_char_p]
+    cu_lib.device_runtime_new_q4.restype = ctypes.c_void_p
 
-cu_lib.device_runtime_forward_q4.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
-cu_lib.device_runtime_forward_q4.restype = ctypes.POINTER(ctypes.c_float)
+    cu_lib.device_runtime_delete_q4.argtypes = [ctypes.c_void_p]
+    cu_lib.device_runtime_delete_q4.restype = None
+
+    cu_lib.device_runtime_forward_q4.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+    cu_lib.device_runtime_forward_q4.restype = ctypes.POINTER(ctypes.c_float)
 
 
 # Setup for runtime_new_f32
