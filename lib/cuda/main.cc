@@ -4,7 +4,7 @@
 
 int main() {
   print_device_info();
-  void *rt = device_runtime_new_q4("../../../bin/llama_q4.bin");
+  void *rt = device_runtime_new_q4("../bin/llama_q4.bin");
   Timer t;
   start_timer(&t);
   float *res = device_runtime_forward_q4(rt, 100, 0);
