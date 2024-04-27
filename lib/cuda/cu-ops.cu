@@ -112,30 +112,35 @@ void d_rms_norm(f32 *out, f32 *x, f32 *weights, i32 n) {
 }
 
 
-__global__ void matvec_mul_q4(i8 *__restrict__ w, f32 *__restrict__ w_s, i8 *__restrict__ x, f32 *__restrict__ x_s, f32 *out, int m,
-                              int n, u32 group_size) {
+template <int N, int Bdim, int g_size>
+__global__ void matvec_mul_q4(i8 *__restrict__ w, f32 *__restrict__ w_s,
+                              i8 *__restrict__ x, f32 *__restrict__ x_s,
+                              f32 *out, int m) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
-  __shared__ char shared_x[4096 / 2];
+  __shared__ char shared_x[N / 2];
 
-  int copy_size = 4096 / 2 / blockDim.x;
+  int copy_size = N / 2 / Bdim;
   int copy_start = threadIdx.x * copy_size;
   int copy_end = copy_start + copy_size;
-  assert(copy_end <= 4096 / 2);
+  assert(copy_end <= N / 2);
   for (int j = copy_start; j < copy_end; j++) {
     shared_x[j] = x[j];
   }
   __syncthreads();
 
-  int groups_per_row = n / group_size;
+  constexpr int half_group = g_size / 2;
+
+  constexpr int groups_per_row = N / g_size;
   if (i < m) {
-    i8 * w_row = w + i * n / 2;
-    f32 * w_s_row = w_s + i * n / group_size;
+    i8 * w_row = w + i * N / 2;
+    f32 * w_s_row = w_s + i * groups_per_row;
     f32 faccum = 0.0f;
+    #pragma unroll groups_per_row
     for (u32 g_idx = 0; g_idx < groups_per_row; g_idx++) {
       i32 iaccum = 0;
-      u32 start_idx = g_idx * group_size / 2;
-      u32 end_idx = (g_idx + 1) * group_size / 2;
-      //#pragma unroll 127
+      u32 start_idx = g_idx * half_group;
+      u32 end_idx = (g_idx + 1) * half_group;
+      #pragma unroll half_group
       for (u32 j = start_idx; j < end_idx; j++) {
         u8 p_x = (u8)shared_x[j];
         i32 x_left = unpack_left(p_x);
@@ -149,58 +154,21 @@ __global__ void matvec_mul_q4(i8 *__restrict__ w, f32 *__restrict__ w_s, i8 *__r
     }
     out[i] = faccum;
   }
-}
 
-__global__ void big_matvec_mul_q4(i8 *__restrict__ w, f32 *__restrict__ w_s, i8 *__restrict__ x, f32 *__restrict__ x_s, f32 *out, int m,
-                              int n, u32 group_size) {
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  __shared__ char shared_x[11008 / 2];
-  int copy_size = 11008 / 2 / blockDim.x;
-  int copy_start = threadIdx.x * copy_size;
-  int copy_end = copy_start + copy_size;
-  assert(copy_end <= 11008 / 2);
-  for (int j = copy_start; j < copy_end; j++) {
-    shared_x[j] = x[j];
-  }
-
-  __syncthreads();
-
-  int groups_per_row = n / group_size;
-  if (i < m) {
-    i8 * w_row = w + i * n / 2;
-    f32 * w_s_row = w_s + i * n / group_size;
-    f32 faccum = 0.0f;
-    for (u32 g_idx = 0; g_idx < groups_per_row; g_idx++) {
-      i32 iaccum = 0;
-      u32 start_idx = g_idx * group_size / 2;
-      u32 end_idx = (g_idx + 1) * group_size / 2;
-      //#pragma unroll 127
-      for (u32 j = start_idx; j < end_idx; j++) {
-        u8 p_x = (u8)shared_x[j];
-        i32 x_left = unpack_left(p_x);
-        i32 x_right = unpack_right(p_x);
-        u8 p_w = (u8)w_row[j];
-        i32 w_left = unpack_left(p_w);
-        i32 w_right = unpack_right(p_w);
-        iaccum += x_left * w_left + x_right * w_right;
-      }
-      faccum += ((float)iaccum) * w_s_row[g_idx] * x_s[g_idx];
-    }
-    out[i] = faccum;
-  }
 }
 
 
 
 
+static constexpr int bdim = 128;
+static constexpr int gdim = 128;
 void d_matvec_mul_q4(i8 *w, f32 *w_s, i8 *x, f32 *x_s, f32 *out, int m,
                      int n, u32 group_size) {
-  int block_size = 128;
-  int grid_size = CEIL_DIV(m, block_size);
+  int grid_size = CEIL_DIV(m, bdim);
   if (n == 11008) {
-    big_matvec_mul_q4<<<grid_size, block_size>>>(w, w_s, x, x_s, out, m, n, group_size);
+    matvec_mul_q4<11008, bdim, gdim><<<grid_size, bdim>>>(w, w_s, x, x_s, out, m);
   } else {
-    matvec_mul_q4<<<grid_size, block_size>>>(w, w_s, x, x_s, out, m, n, group_size);
+    matvec_mul_q4<4096, bdim, gdim><<<grid_size, bdim>>>(w, w_s, x, x_s, out, m);
   }
 }
 
