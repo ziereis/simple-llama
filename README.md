@@ -24,9 +24,9 @@ python3 run.py --bin=bin/chat-llama.bin "Richard Feynman was a "
 ```
 * This works but is very slow, so we suggest you to quantize the model weights by running quantize.py (--h for usage info) we have a forward pass implemented for 8bit and 4bit quantization
 * note that for GPUs we did only implement a 4bit forward pass since we would not be able to test any larger weight file due to hardware constraints. Nevertheless this has the advantage that this runs on almost any GPU since this only require around 6GB of VRAM
-* consider adjusting the paramters of the text generation like top_p and temperature to improve inference quality
-* to use the instruction finetuning of the model have a look at the file chat.py
-* to learn more about llama2 consider taking a look at the model.py file which contains a very easy to understand forward pass in pytorch
+* consider adjusting the parameters of the text generation like type: top_p, top_k, greedy and temperature to improve inference quality
+* to do prompt engineering to the model, have a look at the file chat.py
+* to learn more about llama2 consider taking a look at our model.py file which contains a very easy to understand pytorch implementation from scratch. However, we also implemented and use our cuda/c version, which can be found in /lib.
 # LLama2 model information
 
 
