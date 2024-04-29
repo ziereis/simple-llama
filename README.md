@@ -53,6 +53,8 @@ python3 run.py --bin=bin/chat-llama.bin "Richard Feynman was a "
 * norm (embedding_dim) = (4096)
 * output (embedding_dim, vocab_size) = (4096, 32000)
 
+![LLaMA2 Architecture](llama_architecture.png)
+
 # References:
 
 * https://github.com/karpathy/llama2.c
