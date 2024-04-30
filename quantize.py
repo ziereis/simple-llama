@@ -18,7 +18,7 @@ def quant_q4(input_path: str, output_path: str):
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--bin", type=str, help="path to exported llama f32 weights", default= "bin/llama.bin")
-  parser.add_argument("--q", type=int, help="path to quantized llama weights", default=8)
+  parser.add_argument("--q", type=int, help="quantization level, vaild values are 4 and 8", default=8)
 
   args = parser.parse_args()
 
