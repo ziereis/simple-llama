@@ -10,7 +10,7 @@
 1. run pip install -r requirements.txt
 2. download the meta llama2 7B [weights](https://llama.meta.com/llama-downloads), we **highly recommend to download the llama2-7b-chat** model since the output of this model is way better than the base model, even just for text generation
 3. After downloading the model create a /bin directory in the project root and move the llama-2-7b-chat directory and the tokenizer.model file into the /bin dir
-4. Export the model weights into a our binary file format by running export.py (use --h for a usage guide)
+4. Export the model weights into a our binary file format by running export.py (use --h for a usage guide) (***This needs atleast ~28 peak RAM***)
 5. Compile the c/cuda library which is used for quantization and model inference by running the following commands:
 ```
 mkdir build && cd build
