@@ -4,7 +4,30 @@
 #include <assert.h>
 #include <math.h>
 
-void rms_norm(f32* out, f32* x, f32* weights, i32 n) {
+#ifdef BENCH
+double rms_time = 0;
+double matvec_time = 0;
+double matvec_q8_time = 0;
+double matvec_q4_time = 0;
+double softmax_time = 0;
+double quantize_q8_time = 0;
+double dequantize_q8_time = 0;
+double quantize_q4_time = 0;
+double dequantize_q4_time = 0;
+double attention_time = 0;
+double rotate_time = 0;
+double swiglu_time = 0;
+double residual_time = 0;
+#endif
+
+
+
+void rms_norm(f32 *out, f32 *x, f32 *weights, i32 n) {
+  #ifdef BENCH
+  Timer t;
+  start_timer(&t);
+  #endif
+
   f32 sum = 0.0f;
   for (i32 i = 0; i < n; i++) {
     sum += x[i] * x[i];
@@ -15,11 +38,19 @@ void rms_norm(f32* out, f32* x, f32* weights, i32 n) {
   for (i32 i = 0; i < n; i++) {
     out[i] = weights[i] * x[i] * sum;
   }
+  #ifdef BENCH
+  stop_timer(&t);
+  rms_time += elapsed_time(&t);
+  #endif
 }
 
 #define AT_2D(mat, i, j) mat[i * n + j]
 
 void matvec_mul(f32* weights, f32* x, f32* out, i32 m, i32 n) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
 
 #pragma omp parallel for schedule(static)
   for (i32 i = 0; i < m; i++) {
@@ -29,9 +60,18 @@ void matvec_mul(f32* weights, f32* x, f32* out, i32 m, i32 n) {
     }
     out[i] = val;
   }
+#ifdef BENCH
+  stop_timer(&t);
+  matvec_time += elapsed_time(&t);
+#endif
 }
 
 void matvec_mul_q8(i8  * w, f32  * w_s, i8  * x, f32  * x_s, f32  * out, int m, int n, u32 group_size) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
+
   u32 groups_per_row = n / group_size;
 
 #pragma omp parallel for schedule(static)
@@ -50,6 +90,10 @@ void matvec_mul_q8(i8  * w, f32  * w_s, i8  * x, f32  * x_s, f32  * out, int m, 
     }
     out[i] = faccum;
   }
+#ifdef BENCH
+  stop_timer(&t);
+  matvec_q8_time += elapsed_time(&t);
+#endif
 }
 
 
@@ -58,6 +102,10 @@ void matvec_mul_q8(i8  * w, f32  * w_s, i8  * x, f32  * x_s, f32  * out, int m, 
 #define pack_q4(left, right) (((((u8)left) + 8) << 4) | (((u8)right) + 8))
 
 void matvec_mul_q4(i8  * w, f32  * w_s, i8  * x, f32  * x_s, f32  * out, int m, int n, u32 group_size) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
 
   u32 groups_per_row = n / group_size;
 
@@ -83,9 +131,18 @@ void matvec_mul_q4(i8  * w, f32  * w_s, i8  * x, f32  * x_s, f32  * out, int m, 
     }
     out[i] = faccum;
   }
+#ifdef BENCH
+  stop_timer(&t);
+  matvec_q4_time += elapsed_time(&t);
+#endif
 }
 
 void softmax(f32* x, i32 n) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
+
   f32 max_val = x[0];
   for (i32 i = 1; i < n; i++) {
     max_val = fmax(max_val, x[i]);
@@ -100,10 +157,19 @@ void softmax(f32* x, i32 n) {
   for (i32 i = 0; i < n; i++) {
     x[i] /= sum;
   }
+#ifdef BENCH
+  stop_timer(&t);
+  softmax_time += elapsed_time(&t);
+#endif
 }
 
 void dequantize_q8(f32  * out, i8  * in, f32  * scales,
                    u64 n, i32 group_size) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
+
   u64 n_groups = n / group_size;
 
 #pragma omp parallel for schedule(static)
@@ -114,10 +180,19 @@ void dequantize_q8(f32  * out, i8  * in, f32  * scales,
       out[j] = ((f32)(in[j])) * scales[i];
     }
   }
+#ifdef BENCH
+  stop_timer(&t);
+  dequantize_q8_time += elapsed_time(&t);
+#endif
 }
 
 void quantize_q8(i8  * out, f32  * scales, f32  * in,
                  u64 n, i32 group_size) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
+
   u64 n_groups = n / group_size;
 #pragma omp parallel for schedule(static)
   for (u64 i = 0; i < n_groups; i++) {
@@ -135,10 +210,19 @@ void quantize_q8(i8  * out, f32  * scales, f32  * in,
     }
     scales[i] = scale;
   }
+#ifdef BENCH
+  stop_timer(&t);
+  quantize_q8_time += elapsed_time(&t);
+#endif
 }
 
 void quantize_q4(i8  * out, f32  * scales, f32  * in,
                  u64 n, i32 group_size) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
+
   assert(n % 2 == 0);
   assert(group_size % 2 == 0);
   u64 n_groups = n / group_size;
@@ -160,10 +244,19 @@ void quantize_q4(i8  * out, f32  * scales, f32  * in,
     }
     scales[i] = scale;
   }
+#ifdef BENCH
+  stop_timer(&t);
+  quantize_q4_time += elapsed_time(&t);
+#endif
 }
 
 void dequantize_q4(f32  * out, i8  * in, f32  * scales,
                    u64 n, i32 group_size) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
+
   u64 n_groups = n / group_size;
 #pragma omp parallel for schedule(static)
   for (u64 i = 0; i < n_groups; i++) {
@@ -177,13 +270,20 @@ void dequantize_q4(f32  * out, i8  * in, f32  * scales,
       out[(j * 2) + 1] = ((f32)right) * scales[i];
     }
   }
+#ifdef BENCH
+  stop_timer(&t);
+  dequantize_q4_time += elapsed_time(&t);
+#endif
 }
-
-
 
 void compute_attention(f32 *att, f32 *q, f32 *kcache, f32 *vcache, f32 *out,
                            i32 pos, i32 n_heads, i32 head_dim,
                            i32 max_seq_len) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
+
   int dim = n_heads * head_dim;
   #pragma omp parallel for schedule(static)
   for (int i = 0; i < n_heads; i++) {
@@ -212,9 +312,18 @@ void compute_attention(f32 *att, f32 *q, f32 *kcache, f32 *vcache, f32 *out,
       }
     }
   }
+#ifdef BENCH
+  stop_timer(&t);
+  attention_time += elapsed_time(&t);
+#endif
 }
 
 void rotate_embeddings(f32* x, i32 pos, i32 head_dim, i32 dim) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
+
   for (i32 i = 0; i < dim; i += 2) {
     int idx = i % head_dim;
     float freq = 1.0f / powf(10000.0f, idx / (float)head_dim);
@@ -226,19 +335,41 @@ void rotate_embeddings(f32* x, i32 pos, i32 head_dim, i32 dim) {
     x[i] = v0 * fcr - v1 * fci;
     x[i + 1] = v0 * fci + v1 * fcr;
   }
+#ifdef BENCH
+  stop_timer(&t);
+  rotate_time += elapsed_time(&t);
+#endif
 }
 
 void swiglu(f32* out, f32* scales, i32 n) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
+
   for (i32 i = 0; i < n; i++) {
     float val = out[i];
     val *= 1.0f / (1.0f + expf(-val));
     val *= scales[i];
     out[i] = val;
   }
+#ifdef BENCH
+  stop_timer(&t);
+  swiglu_time += elapsed_time(&t);
+#endif
 }
 
 void residual(f32* out, f32* in, i32 n) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
+
   for (i32 i = 0; i < n; i++) {
     out[i] += in[i];
   }
+#ifdef BENCH
+  stop_timer(&t);
+  residual_time += elapsed_time(&t);
+#endif
 }

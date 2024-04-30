@@ -3,7 +3,20 @@
 #include <cfloat>
 #include <cuda_device_runtime_api.h>
 #include <cuda_runtime_api.h>
+#include "lib/utils.h"
 #include "stdio.h"
+
+
+#ifdef BENCH
+double rms_time = 0;
+double matvec_q4_time = 0;
+double quantize_q4_time = 0;
+double dequantize_q4_time = 0;
+double attention_time = 0;
+double rotate_time = 0;
+double swiglu_time = 0;
+double residual_time = 0;
+#endif
 
 
 #define unpack_left(in) ((in >> 4) & 0x0f) - 8
@@ -28,7 +41,17 @@ __global__ void deq_q4(f32 *out, i8 *in, f32 *scales, u64 n, i32 group_size) {
 
 void d_dequantize_q4(f32 *out, i8 *in, f32 *scales, u64 n, i32 group_size) {
   u64 n_groups = n / group_size;
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
   deq_q4<<<n_groups, group_size>>>(out, in, scales, n, group_size);
+#ifdef BENCH
+  cudaDeviceSynchronize();
+  stop_timer(&t);
+  dequantize_q4_time += elapsed_time(&t);
+#endif
+
 }
 
 __global__ void quant_q4(i8 *out, f32 *scales, f32 *in, u64 n, i32 group_size) {
@@ -54,7 +77,16 @@ __global__ void quant_q4(i8 *out, f32 *scales, f32 *in, u64 n, i32 group_size) {
 
 void d_quantize_q4(i8 *out, f32 *scales, f32 *in, u64 n, i32 group_size) {
   u64 n_groups = n / group_size;
+  #ifdef BENCH
+  Timer t;
+  start_timer(&t);
+  #endif
   quant_q4<<<n_groups, group_size>>>(out, scales, in, n, group_size);
+  #ifdef BENCH
+  cudaDeviceSynchronize();
+  stop_timer(&t);
+  quantize_q4_time += elapsed_time(&t);
+  #endif
 }
 
 
@@ -95,6 +127,11 @@ __global__ void scale(float* out, float* x, float* weights, float sum, int n) {
 #define CEIL_DIV(x, y) (((x) + (y) - 1) / (y))
 
 void d_rms_norm(f32 *out, f32 *x, f32 *weights, i32 n) {
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
+
   float *d_sum;
   cudaMalloc(&d_sum, sizeof(float));
   cudaMemset(d_sum, 0, sizeof(float));
@@ -109,6 +146,11 @@ void d_rms_norm(f32 *out, f32 *x, f32 *weights, i32 n) {
   h_sum += 1e-5f;
   h_sum = 1.0f / sqrt(h_sum);
   scale<<<grid_size, block_size>>>(out, x, weights, h_sum, n);
+#ifdef BENCH
+  cudaDeviceSynchronize();
+  stop_timer(&t);
+  rms_time += elapsed_time(&t);
+#endif
 }
 
 
@@ -154,9 +196,7 @@ __global__ void matvec_mul_q4(i8 *__restrict__ w, f32 *__restrict__ w_s,
     }
     out[i] = faccum;
   }
-
 }
-
 
 
 
@@ -165,11 +205,20 @@ static constexpr int gdim = 128;
 void d_matvec_mul_q4(i8 *w, f32 *w_s, i8 *x, f32 *x_s, f32 *out, int m,
                      int n, u32 group_size) {
   int grid_size = CEIL_DIV(m, bdim);
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
   if (n == 11008) {
     matvec_mul_q4<11008, bdim, gdim><<<grid_size, bdim>>>(w, w_s, x, x_s, out, m);
   } else {
     matvec_mul_q4<4096, bdim, gdim><<<grid_size, bdim>>>(w, w_s, x, x_s, out, m);
   }
+#ifdef BENCH
+  cudaDeviceSynchronize();
+  stop_timer(&t);
+  matvec_q4_time += elapsed_time(&t);
+#endif
 }
 
 
@@ -192,7 +241,17 @@ __global__ void rot_emb(float* x, int pos, int head_dim, int dim) {
 void d_rotate_embeddings(f32 *x, i32 pos, i32 head_dim, i32 dim) {
     int block_size = 256;
     int grid_size = CEIL_DIV(dim / 2, block_size);
+#ifdef BENCH
+    Timer t;
+    start_timer(&t);
+#endif
+
     rot_emb<<<grid_size, block_size>>>(x, pos, head_dim, dim);
+#ifdef BENCH
+  cudaDeviceSynchronize();
+    stop_timer(&t);
+    rotate_time += elapsed_time(&t);
+#endif
 }
 
 
@@ -249,17 +308,23 @@ __global__ void compute_output_kernel(float *att, float *vcache, float *out, int
 void d_compute_attention(f32 *att, f32 *q, f32 *kcache, f32 *vcache, f32 *out,
                          i32 pos, i32 n_heads, i32 head_dim, i32 max_seq_len) {
 dim3 blocks(n_heads);
-dim3 threadsPerBlock(pos + 1);  // Ensure this is within CUDA limits
+dim3 threadsPerBlock(pos + 1);
+#ifdef BENCH
+Timer t;
+start_timer(&t);
+#endif
 
 compute_scores_kernel<<<blocks, threadsPerBlock>>>(q, kcache, att, pos, n_heads, head_dim, max_seq_len);
-cudaDeviceSynchronize();  // Sync before starting softmax
+cudaDeviceSynchronize();
 apply_softmax_kernel<<<blocks, 1>>>(att, pos, n_heads, max_seq_len);
-cudaDeviceSynchronize();  // Sync before final output computation
-
-dim3 outputThreadsPerBlock(head_dim);  // Ensure within limits
+cudaDeviceSynchronize();
+dim3 outputThreadsPerBlock(head_dim);
 compute_output_kernel<<<blocks, outputThreadsPerBlock>>>(att, vcache, out, pos, n_heads, head_dim, max_seq_len);
-cudaDeviceSynchronize();  // Sync after computation
-
+cudaDeviceSynchronize();
+#ifdef BENCH
+stop_timer(&t);
+attention_time += elapsed_time(&t);
+#endif
 }
 
 __global__ void add(float *out, float *a, int n) {
@@ -272,7 +337,16 @@ __global__ void add(float *out, float *a, int n) {
 void d_residual(f32 *out, f32 *a, i32 n) {
     int block_size = 256;
     int grid_size = CEIL_DIV(n, block_size);
+#ifdef BENCH
+    Timer t;
+    start_timer(&t);
+#endif
     add<<<grid_size, block_size>>>(out, a, n);
+#ifdef BENCH
+cudaDeviceSynchronize();
+    stop_timer(&t);
+    residual_time += elapsed_time(&t);
+#endif
 }
 
 
@@ -289,5 +363,14 @@ __global__ void swig(f32* out, f32* scales,  int n) {
 void d_swiglu(f32 *out, f32 *scales, i32 n) {
   int block_size = 256;
   int grid_size = CEIL_DIV(n, block_size);
+#ifdef BENCH
+  Timer t;
+  start_timer(&t);
+#endif
   swig<<<grid_size, block_size>>>(out, scales, n);
+#ifdef BENCH
+cudaDeviceSynchronize();
+  stop_timer(&t);
+  swiglu_time += elapsed_time(&t);
+#endif
 }

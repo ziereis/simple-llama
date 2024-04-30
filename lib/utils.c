@@ -19,9 +19,10 @@ void start_timer(Timer *t) { clock_gettime(CLOCK_MONOTONIC, &t->start); }
 
 void stop_timer(Timer *t) { clock_gettime(CLOCK_MONOTONIC, &t->end); }
 
-int elapsed_time(Timer *t) {
-  return (int)((t->end.tv_sec - t->start.tv_sec) * 1000 +
-               (t->end.tv_nsec - t->start.tv_nsec) / 1e6);
+double elapsed_time(Timer *t) {
+    double delta_sec = (double)(t->end.tv_sec - t->start.tv_sec);
+    double delta_nsec = (double)(t->end.tv_nsec - t->start.tv_nsec);
+    return (delta_sec + (delta_nsec / 1e9)) * 1000;
 }
 
 

@@ -55,7 +55,7 @@ if(CUDA)
     target_compile_options(cu_llama PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
                            --use_fast_math
                            >)
-    add_executable(test_cuda lib/cuda/main.cc)
+    add_executable(test_cuda lib/cuda/main.cc )
     target_link_libraries(test_cuda PRIVATE cu_llama)
 
     target_link_libraries(test PRIVATE cu_llama)

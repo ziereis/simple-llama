@@ -1,5 +1,19 @@
 #include "../utils.h"
 
+
+#ifdef BENCH
+#ifdef BENCH
+extern double rms_time;
+extern double matvec_q4_time;
+extern double quantize_q4_time;
+extern double dequantize_q4_time;
+extern double attention_time;
+extern double rotate_time;
+extern double swiglu_time;
+extern double residual_time;
+#endif
+#endif
+
 void d_dequantize_q4(f32 *out, i8 *in, f32 *scales, u64 n, i32 group_size);
 void d_rms_norm(f32 *out, f32 *x, f32 *weights, i32 n);
 void d_quantize_q4(i8 *out, f32 *scales, f32 *in, u64 n, i32 group_size);

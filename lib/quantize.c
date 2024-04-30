@@ -35,7 +35,7 @@ void do_quant_q8(const char *layer_name, FILE *out, f32 *data, u64 n,
   fwrite(q_buf, n, 1, out);
   fwrite(scales_buf, n / group_size * sizeof(f32), 1, out);
   stop_timer(&timer);
-  printf("Time: %i ms\n", elapsed_time(&timer));
+  printf("Time: %0.2f ms\n", elapsed_time(&timer));
 }
 
 void do_quant_q4(const char *layer_name, FILE *out, f32 *data, u64 n,
@@ -50,7 +50,7 @@ void do_quant_q4(const char *layer_name, FILE *out, f32 *data, u64 n,
   fwrite(q_buf, n / 2, 1, out);
   fwrite(scales_buf, n / group_size * sizeof(f32), 1, out);
   stop_timer(&timer);
-  printf("Time: %d ms\n", elapsed_time(&timer));
+  printf("Time: %0.2f ms\n", elapsed_time(&timer));
 }
 
 void quant_model(const char *in_file, const char *out_file,

@@ -68,7 +68,7 @@ typedef struct {
 
 void start_timer(Timer *t);
 void stop_timer(Timer *t);
-i32 elapsed_time(Timer *t);
+double elapsed_time(Timer *t);
 
 typedef struct {
   i8 left;

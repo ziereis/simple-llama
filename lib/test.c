@@ -307,11 +307,35 @@ int main() {
   // printf("Time: %d ms\n", elapsed_time(&timer));
   //res = test_matvec_mal();
   //quant_model("../bin/llama.bin", "../bin/llama_q4.bin", Q4);
-  // QLLama m;
-  // MappedFile in;
-  // init(&in, "../bin/llama_q8.bin");
-  // qllama_init(&m, in.data, in.len);
-  // QLLamaRuntime rt;
-  // runtime_init_q8(&rt, &m);
+  LLama m;
+  MappedFile in;
+  init(&in, "../bin/chat-llama.bin");
+  llama_init(&m, in.data, in.len);
+  LLamaRuntime rt;
+  runtime_init_f32(&rt, &m);
+  // double overall_time = 0;
+  // Timer timer;
+  #ifdef BENCH
+  for (int i = 0; i < 10; i++) {
+    start_timer(&timer);
+    forward_f32(&rt, 100, 0);
+    stop_timer(&timer);
+    overall_time += elapsed_time(&timer);
+  }
+  printf("Time: %.4f\n", overall_time / 10);
+  printf("rms_time: %.4f\n", rms_time / 10);
+  printf("matvec_time: %.4f\n", matvec_time / 10);
+  printf("matvec_q8_time: %.4f\n", matvec_q8_time / 10);
+  printf("matvec_q4_time: %.4f\n", matvec_q4_time / 10);
+  printf("softmax_time: %.4f\n", softmax_time / 10);
+  printf("quantize_q8_time: %.4f\n", quantize_q8_time / 10);
+  printf("dequantize_q8_time: %.4f\n", dequantize_q8_time / 10);
+  printf("quantize_q4_time: %.4f\n", quantize_q4_time / 10);
+  printf("dequantize_q4_time: %.4f\n", dequantize_q4_time / 10);
+  printf("attention_time: %.4f\n", attention_time / 10);
+  printf("rotate_time: %.4f\n", rotate_time / 10);
+  printf("swiglu_time: %.4f\n", swiglu_time / 10);
+  printf("residual_time: %.4f\n", residual_time / 10);
+  #endif
   return 0;
 }
