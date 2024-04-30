@@ -47,7 +47,7 @@ def serialize(filename: str, model: Transformer):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("--default-dir", type=str, help="path to default model dir", default="bin/llama-2-7b")
+  parser.add_argument("--default-dir", type=str, help="path to default model dir", default="bin/llama-2-7b-chat")
   parser.add_argument("--tok-path", type=str, help="path to tokenizer model", default="bin/tokenizer.model")
   parser.add_argument("--max_seq_len", type=int, help="max sequence length", default=1024)
   parser.add_argument("--bin-dir", type=str, help="path to bin directory", default="bin")
@@ -57,5 +57,9 @@ if __name__ == "__main__":
   load_tokenizerk = load_tokenizer(args.tok_path)
   print(f"loading model from {args.default_dir} ")
   model = load_llama(args.default_dir, load_tokenizerk.vocab_size(), args.max_seq_len)
-  print(f"serializing model to {args.bin_dir}/chat-llama.bin")
-  serialize(f"{args.bin_dir}/chat-llama.bin", model)
+  if args.default_dir.split("-")[-1] == "chat":
+     print("serializing chat model")
+     serialize(f"{args.bin_dir}/chat-llama.bin", model)
+  else:
+    print("serializing model")
+    serialize(f"{args.bin_dir}/llama.bin", model)
