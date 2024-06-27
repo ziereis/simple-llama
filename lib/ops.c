@@ -4,6 +4,30 @@
 #include <assert.h>
 #include <math.h>
 
+/*
+This file provides various operations and utility functions for neural network computations,
+specifically for the LLaMA model.
+
+The key functionalities include:
+- RMS normalization
+- Matrix-vector multiplication for different quantization formats (F32, Q8, Q4)
+- Softmax computation
+- Quantization and dequantization operations for Q8 and Q4 formats
+- Attention computation
+- Embedding rotation
+- SwigLU activation
+- Residual connection addition
+
+The file includes:
+- Functions for RMS normalization and matrix-vector multiplication.
+- Definitions and macros for handling quantized data.
+- Functions for quantizing and dequantizing data.
+- Functions for computing attention mechanisms.
+- Functions for performing operations like SwigLU and residual connections.
+- Benchmarks for measuring the time taken by each operation when BENCH is defined.
+
+*/
+
 #ifdef BENCH
 double rms_time = 0;
 double matvec_time = 0;
