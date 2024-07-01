@@ -3,6 +3,28 @@ import ctypes
 import numpy as np
 import os
 
+"""
+This module provides a runtime interface for the LLaMA model, allowing for different quantization levels 
+(F32, Q8, Q4) and GPU support for Q4 models.
+
+The module dynamically loads shared libraries for CPU and GPU operations and defines an abstract base class `Runtime` 
+and its concrete implementations (`F32Runtime`, `Q8Runtime`, `Q4Runtime`, `DeviceQ4Runtime`). 
+It also includes a factory function `CreateRuntime` to instantiate the appropriate runtime based on the model file 
+and the target device.
+
+Classes and Functions:
+- `Runtime` (ABC): Abstract base class for model runtimes.
+- `F32Runtime`: Implementation of `Runtime` for F32 quantization.
+- `Q8Runtime`: Implementation of `Runtime` for Q8 quantization.
+- `Q4Runtime`: Implementation of `Runtime` for Q4 quantization.
+- `DeviceQ4Runtime`: Implementation of `Runtime` for Q4 quantization on GPU.
+- `CreateRuntime`: Factory function to create the appropriate runtime instance based on the model file and device.
+
+Example usage:
+    llama = CreateRuntime('bin/llama_q4.bin', device="gpu")
+    print(llama.forward(100, 0))
+"""
+
 # Load the library
 lib = ctypes.CDLL('build/libllama.so')
 

@@ -77,7 +77,17 @@ def generate_text(llama: Runtime, prompt: str, max_toks: int = 30, method: str =
   return tokenizer.decode(output_tokens)
 
 
-def sample_top_p(probs, p):
+def sample_top_p(probs: torch.Tensor, p: float) -> int:
+  """
+  Samples the next token using top-p (nucleus) sampling.
+
+  Args:
+      probs (torch.Tensor): The probability distribution over the vocabulary.
+      p (float): The cumulative probability threshold.
+
+  Returns:
+      int: The index of the sampled token.
+  """
   # probs sorted: [0.4499, 0.4071, ...]
   # probs cum_sum: [0.4499, 0.8571, ...]
   # safe probs_idx so we will remember the inital ordering of the vocabulary after mixing it up by sort
@@ -93,7 +103,18 @@ def sample_top_p(probs, p):
   next_token = torch.gather(probs_idx, -1, next_token)
   return next_token.item()
 
-def sample_top_k(probs, k):
+
+def sample_top_k(probs: torch.Tensor, k: int) -> int:
+  """
+  Samples the next token using top-k sampling.
+
+  Args:
+      probs (torch.Tensor): The probability distribution over the vocabulary.
+      k (int): The number of top tokens to consider for sampling.
+
+  Returns:
+      int: The index of the sampled token.
+  """
   top_k_probs, top_k_indices = torch.topk(probs, k)
   next_token = top_k_indices[torch.multinomial(top_k_probs, num_samples=1)]
   return next_token.item()

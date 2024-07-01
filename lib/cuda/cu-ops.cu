@@ -6,6 +6,34 @@
 #include "lib/utils.h"
 #include "stdio.h"
 
+/*
+This file provides CUDA-based operations for the LLaMA model, specifically for handling Q4 quantization format.
+
+The key functionalities include:
+- Dequantization and quantization of Q4 format tensors.
+- Root Mean Square (RMS) normalization.
+- Matrix-vector multiplication for Q4 format.
+- Rotation of embeddings.
+- Computation of attention scores, applying softmax, and computing the attention output.
+- Residual connections and Swish-Gated Linear Unit (SWIGLU) activation.
+
+The file includes:
+- CUDA kernel functions for dequantization, quantization, RMS normalization, matrix-vector multiplication, embedding rotation, attention computation, residual connections, and SWIGLU activation.
+- Host functions to launch the CUDA kernels and synchronize the device.
+
+
+Example usage:
+    f32* output;
+    d_dequantize_q4(output, input, scales, n, group_size);
+    d_rms_norm(output, input, weights, n);
+    d_matvec_mul_q4(weights, weight_scales, input, input_scales, output, m, n, group_size);
+    d_compute_attention(att, q, kcache, vcache, output, pos, n_heads, head_dim, max_seq_len);
+    d_residual(output, input, n);
+    d_swiglu(output, scales, n);
+
+This will perform various operations on Q4 quantized tensors using CUDA.
+*/
+
 
 #ifdef BENCH
 double rms_time = 0;
