@@ -8,6 +8,24 @@
 #include <string.h>
 
 #include "llama.h"
+
+/*
+This file provides implementations for initializing and running LLaMA model inference in various quantization formats (F32, Q8, Q4).
+
+The key functionalities include:
+- Initialization of model parameters and matrices.
+- Loading and setting up model weights from a binary file.
+- Running forward passes for different quantization formats (F32, Q8, Q4).
+- Managing runtime resources and memory allocation for model inference.
+
+The file includes:
+- Definitions for initializing matrices and quantized matrices.
+- Functions for loading and setting up the LLaMA model.
+- Functions for initializing and deinitializing runtime environments.
+- Forward pass functions for running inference with the LLaMA model.
+
+*/
+
 void init_mat(Matrix *m, i32 rows, i32 cols, u8 *data, u64 pos) {
   m->shape[0] = rows;
   m->shape[1] = cols;

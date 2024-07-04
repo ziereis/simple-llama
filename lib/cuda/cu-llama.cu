@@ -6,6 +6,31 @@
 #include "cu-llama.h"
 #include "algorithm"
 
+/*
+This file provides CUDA-based implementations for initializing and running LLaMA model inference on a GPU, specifically for Q4 quantization format.
+
+The key functionalities include:
+- Printing CUDA device information.
+- Allocating and freeing device memory for matrices and quantized matrices.
+- Copying data between host and device memory.
+- Initializing and deinitializing LLaMA model data on the device.
+- Performing forward passes on the GPU using Q4 quantization.
+
+The file includes:
+- Functions to print device properties and allocate/free CUDA memory.
+- Functions to copy data between host and device.
+- Initialization functions for setting up model data on the GPU.
+- Functions to perform forward passes and deinitialize runtime resources on the GPU.
+
+Example usage:
+    void* handle = device_runtime_new_q4("model_file");
+    float* output = device_runtime_forward_q4(handle, token, position);
+    device_runtime_delete_q4(handle);
+
+This will initialize the LLaMA model on a GPU, perform a forward pass, and clean up resources.
+*/
+
+
 void print_device_info() {
   cudaDeviceProp prop;
   int count = 0;

@@ -8,6 +8,28 @@
 #include "string.h"
 #include "ops.h"
 
+/*
+This file provides functionality for quantizing the LLaMA model weights to different precision formats (Q8, Q4).
+
+The key functionalities include:
+- Calculating quantization errors.
+- Performing quantization and dequantization for Q8 and Q4 formats.
+- Writing quantized data to output files.
+- Initializing and handling LLaMA model data.
+
+The file includes:
+- Definitions for quantization buffers.
+- Functions to quantize and dequantize model weights.
+- Functions to calculate quantization errors.
+- Main function to quantize a model and save the quantized weights to a file.
+
+Example usage:
+    quant_model("input_model_file", "output_quantized_file", Q8);
+
+This will quantize the model weights to Q8 and save the output to a specified file.
+*/
+
+
 float calc_error(f32 *orig, f32 *deq, u64 n) {
   f32 max_err = 0.0f;
   #pragma omp parallel for schedule(static) reduction(max : max_err)

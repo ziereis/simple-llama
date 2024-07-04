@@ -7,6 +7,21 @@ from pathlib import Path
 import json
 from model import ModelArgs, Transformer
 
+"""
+This module provides utility functions for loading the LLaMA model and its tokenizer.
+
+The module includes functions to:
+- Load a pretrained LLaMA model from checkpoint files.
+- Load a SentencePiece tokenizer for encoding and decoding text.
+
+Functions:
+- `load_llama(checkpoints_dir: str, vocab_size: int, max_seq_len: int)`: Loads the LLaMA model from checkpoint files.
+- `load_tokenizer(tokenizer_path: str)`: Loads the SentencePiece tokenizer.
+
+Example usage:
+    model = load_llama('checkpoints/', vocab_size=32000, max_seq_len=2048)
+    tokenizer = load_tokenizer('tokenizer.model')
+"""
 
 def load_llama(checkpoints_dir: str, vocab_size: int, max_seq_len: int):
     prev_time = time.time()

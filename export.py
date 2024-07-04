@@ -5,6 +5,22 @@ import torch
 from tqdm import tqdm
 from model import Transformer
 
+"""
+This module provides functionality for loading, serializing, and saving LLaMA model weights.
+
+The module includes functions to:
+- Serialize the LLaMA model weights to a binary file in FP32 format.
+- Load a pretrained LLaMA model and its tokenizer.
+
+Functions:
+- `serialize_fp32(file, tensor)`: Writes one FP32 tensor to a file that is open in write-binary mode.
+- `serialize(filename: str, model: Transformer)`: Serializes the model weights to a binary file.
+
+Example usage:
+    python serialize_model.py --default-dir path/to/model/dir --tok-path path/to/tokenizer.model --max_seq_len 1024 --bin-dir path/to/bin/dir
+
+This will load the LLaMA model and tokenizer, then serialize the model weights to a binary file.
+"""
 
 def serialize_fp32(file, tensor):
     """ writes one fp32 tensor to file that is open in wb mode """
